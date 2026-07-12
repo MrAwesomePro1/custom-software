@@ -1,6 +1,16 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import {
+  CalendarApp, CameraApp, ClockApp, CustomWorkspaceApp, FilesApp, FitnessApp, FocusApp,
+  MapsApp, MessagesApp, MusicApp, NotesApp, PhotosApp, RecipeApp, SketchpadApp,
+  StargazerApp, TowerGameApp, WeatherApp,
+} from "./functional-apps";
+
+interface InstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+}
 
 type Device = {
   id: string;
@@ -99,6 +109,8 @@ export default function Home() {
   const [wallpaper, setWallpaper] = useState(WALLPAPERS[0]);
   const [controlCenter, setControlCenter] = useState(false);
   const [toast, setToast] = useState("");
+  const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
+  const [installHelp, setInstallHelp] = useState(false);
   const [now, setNow] = useState(new Date());
   const [newApp, setNewApp] = useState({ name: "", icon: "🚀", category: "Utilities", description: "", color: "#6c5ce7" });
 
@@ -125,6 +137,24 @@ export default function Home() {
     window.addEventListener("keydown", handleKeyboard);
     return () => window.removeEventListener("keydown", handleKeyboard);
   }, []);
+
+  useEffect(() => {
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+    const captureInstall = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as InstallPromptEvent);
+    };
+    window.addEventListener("beforeinstallprompt", captureInstall);
+    return () => window.removeEventListener("beforeinstallprompt", captureInstall);
+  }, []);
+
+  const installApp = async () => {
+    if (!installPrompt) { setInstallHelp(true); return; }
+    await installPrompt.prompt();
+    const choice = await installPrompt.userChoice;
+    if (choice.outcome === "accepted") notify("Custom Software installed");
+    setInstallPrompt(null);
+  };
 
   useEffect(() => {
     try {
@@ -240,6 +270,7 @@ export default function Home() {
             </select>
           </label>
           <button className="tool-button" type="button" onClick={() => setLandscape((value) => !value)} aria-label="Rotate device"><span>↻</span> Rotate</button>
+          <button className="tool-button install-button" type="button" onClick={installApp} aria-label="Install Custom Software"><span>↓</span> Install App</button>
         </div>
         <div className="studio-status"><span className="live-dot" /> Interactive preview</div>
       </header>
@@ -308,6 +339,7 @@ export default function Home() {
           </ul>
         </aside>
       </section>
+      {installHelp && <div className="install-help-layer" role="dialog" aria-modal="true" aria-label="Install Custom Software"><div className="install-help-card"><button className="install-close" type="button" onClick={() => setInstallHelp(false)} aria-label="Close">×</button><span className="brand-mark">CS</span><h2>Install Custom Software</h2><p><strong>iPhone or iPad</strong>Tap the Share button in Safari, then choose <b>Add to Home Screen</b>.</p><p><strong>Nitro V 15</strong>Open this page in Chrome or Edge, then choose <b>Install Custom Software</b> from the address bar or browser menu.</p><button type="button" onClick={() => setInstallHelp(false)}>Got it</button></div></div>}
     </main>
   );
 }
@@ -350,11 +382,27 @@ type AppViewProps = {
 
 function AppView(props: AppViewProps) {
   if (props.id === "store") return <CustomStore {...props} />;
+  if (props.id === "messages") return <MessagesApp onClose={props.onClose} />;
+  if (props.id === "calendar") return <CalendarApp onClose={props.onClose} />;
+  if (props.id === "photos") return <PhotosApp onClose={props.onClose} />;
+  if (props.id === "camera") return <CameraApp onClose={props.onClose} />;
+  if (props.id === "clock") return <ClockApp onClose={props.onClose} />;
+  if (props.id === "maps") return <MapsApp onClose={props.onClose} />;
+  if (props.id === "files") return <FilesApp onClose={props.onClose} />;
   if (props.id === "settings") return <SettingsApp wallpaper={props.wallpaper} chooseWallpaper={props.chooseWallpaper} device={props.device} onClose={props.onClose} />;
   if (props.id === "calculator") return <Calculator onClose={props.onClose} />;
-  if (props.id === "notes") return <Notes onClose={props.onClose} />;
-  if (props.id === "weather") return <Weather onClose={props.onClose} />;
+  if (props.id === "notes") return <NotesApp onClose={props.onClose} />;
+  if (props.id === "weather") return <WeatherApp onClose={props.onClose} />;
   if (props.id === "devices") return <DeviceLibrary currentDeviceId={props.deviceId} setDeviceId={props.setDeviceId} onClose={props.onClose} />;
+  if (props.id === "sketchpad") return <SketchpadApp onClose={props.onClose} />;
+  if (props.id === "orbit") return <WeatherApp orbit onClose={props.onClose} />;
+  if (props.id === "pulse") return <FitnessApp onClose={props.onClose} />;
+  if (props.id === "soundwave") return <MusicApp onClose={props.onClose} />;
+  if (props.id === "tiny-tower") return <TowerGameApp onClose={props.onClose} />;
+  if (props.id === "focus") return <FocusApp onClose={props.onClose} />;
+  if (props.id === "stargazer") return <StargazerApp onClose={props.onClose} />;
+  if (props.id === "recipebox") return <RecipeApp onClose={props.onClose} />;
+  if (props.app) return <CustomWorkspaceApp app={props.app} onClose={props.onClose} />;
   return <GenericApp app={props.app} id={props.id} onClose={props.onClose} />;
 }
 
