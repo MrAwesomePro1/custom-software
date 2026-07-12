@@ -6,6 +6,7 @@ import "./functional-apps.css";
 import "./social-settings.css";
 import "./accounts-wallet.css";
 import "./software-viders.css";
+import "./wifi-country.css";
 
 export async function generateMetadata(): Promise<Metadata> {
   const requestHeaders = await headers();

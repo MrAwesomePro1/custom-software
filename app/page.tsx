@@ -126,6 +126,7 @@ export default function Home() {
   const [familyState, setFamilyState] = useState<FamilyState | null>(null);
   const [familyReady, setFamilyReady] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
+  const [country, setCountry] = useState("");
   const [now, setNow] = useState(new Date());
   const [newApp, setNewApp] = useState({ name: "", icon: "🚀", category: "Utilities", description: "", color: "#6c5ce7" });
 
@@ -177,6 +178,7 @@ export default function Home() {
     try {
       const saved = localStorage.getItem("cs-family-state");
       if (saved) setFamilyState(JSON.parse(saved));
+      setCountry(localStorage.getItem("cs-country") || "");
       setSignedIn(sessionStorage.getItem("cs-account-session") === "active");
     } catch { /* show account setup */ }
     setFamilyReady(true);
@@ -279,6 +281,7 @@ export default function Home() {
   } as React.CSSProperties;
 
   if (!familyReady) return <div className="account-loading"><span className="brand-mark">CS</span><p>Starting Custom Software...</p></div>;
+  if (!country) return <CountrySetup onComplete={(choice) => { localStorage.setItem("cs-country", choice); setCountry(choice); }} />;
   if (!familyState) return <AccountSetup onComplete={(next) => { updateFamilyState(next); sessionStorage.setItem("cs-account-session", "active"); setSignedIn(true); }} />;
   if (!signedIn) return <AccountLogin state={familyState} onSuccess={(next) => { updateFamilyState(next); sessionStorage.setItem("cs-account-session", "active"); setSignedIn(true); }} />;
 
@@ -393,6 +396,11 @@ export default function Home() {
       {installHelp && <div className="install-help-layer" role="dialog" aria-modal="true" aria-label="Install Custom Software"><div className="install-help-card"><button className="install-close" type="button" onClick={() => setInstallHelp(false)} aria-label="Close">×</button><span className="brand-mark">CS</span><h2>Install Custom Software</h2><p><strong>iPhone or iPad</strong>Tap the Share button in Safari, then choose <b>Add to Home Screen</b>.</p><p><strong>Nitro V 15</strong>Open this page in Chrome or Edge, then choose <b>Install Custom Software</b> from the address bar or browser menu.</p><button type="button" onClick={() => setInstallHelp(false)}>Got it</button></div></div>}
     </main>
   );
+}
+
+function CountrySetup({ onComplete }: { onComplete: (country: string) => void }) {
+  const [selected, setSelected] = useState("");
+  return <main className="account-setup country-setup"><div className="account-panel"><span className="brand-mark">CS</span><div className="setup-heading"><small>WELCOME TO</small><h1>Choose your country</h1><p>This sets the local network region for Custom Software. You can choose only United States or KidTopia.</p></div><div className="country-options"><button className={selected === "United States" ? "selected" : ""} type="button" onClick={() => setSelected("United States")}><span>US</span><div><strong>United States</strong><small>United States local networks</small></div><b>{selected === "United States" ? "Selected" : "Choose"}</b></button><button className={selected === "KidTopia" ? "selected" : ""} type="button" onClick={() => setSelected("KidTopia")}><span>KT</span><div><strong>KidTopia</strong><small>KidTopia local networks</small></div><b>{selected === "KidTopia" ? "Selected" : "Choose"}</b></button></div><button className="setup-submit country-continue" type="button" disabled={!selected} onClick={() => onComplete(selected)}>Continue</button></div></main>;
 }
 
 function AccountSetup({ onComplete }: { onComplete: (state: FamilyState) => void }) {
@@ -572,6 +580,8 @@ function InteractiveSettings({ wallpaper, chooseWallpaper, device, onClose }: { 
   const [softwareVersion, setSoftwareVersion] = useState("1.0.4");
   const [updating, setUpdating] = useState(false);
   const [updateMessage, setUpdateMessage] = useState("");
+  const [country, setCountry] = useState("United States");
+  const [wifi, setWifi] = useState({ enabled: true, hotspot: false, connected: "" });
 
   useEffect(() => {
     try {
@@ -580,6 +590,9 @@ function InteractiveSettings({ wallpaper, chooseWallpaper, device, onClose }: { 
       const savedWallet = localStorage.getItem("cs-awesome-wallet");
       if (savedWallet) setWallet(JSON.parse(savedWallet));
       setSoftwareVersion(localStorage.getItem("cs-software-version") || "1.0.4");
+      setCountry(localStorage.getItem("cs-country") || "United States");
+      const savedWifi = localStorage.getItem("cs-wifi");
+      if (savedWifi) setWifi({ enabled: true, hotspot: false, connected: "", ...JSON.parse(savedWifi) });
     } catch { /* keep defaults */ }
   // Settings are loaded once when the app opens.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -619,11 +632,23 @@ function InteractiveSettings({ wallpaper, chooseWallpaper, device, onClose }: { 
       setUpdating(false);
     }
   };
+  const saveWifi = (next: typeof wifi) => { setWifi(next); localStorage.setItem("cs-wifi", JSON.stringify(next)); };
+  const localNetworks = country === "KidTopia" ? ["KidTopia Local", "KidTopia Family", "KT Community"] : ["Home Network", "Community Wi-Fi", "Custom Local"];
+  const toggleWifi = () => saveWifi({ ...wifi, enabled: !wifi.enabled, connected: wifi.enabled ? "" : wifi.connected });
+  const toggleHotspot = () => {
+    if (!wallet.cellular || device.family !== "phone") return;
+    saveWifi({ ...wifi, hotspot: !wifi.hotspot });
+  };
+  const connectNetwork = (network: string) => {
+    if (!wifi.enabled) return;
+    saveWifi({ ...wifi, connected: wifi.connected === network ? "" : network });
+  };
 
   return <div className="app-window settings-window interactive-settings"><AppHeader title="Settings" onClose={onClose} />
     <div className="settings-scroll"><h2>Settings</h2>
       <div className="profile-card"><span>CS</span><div><input value={deviceName} onChange={(event) => rename(event.target.value)} aria-label="Device name" /><small>{device.name} • Custom Software 1.0</small></div><b>✓</b></div>
       <section><h3>Wallpaper</h3><div className="wallpaper-picker">{WALLPAPERS.map((choice) => <button key={choice} className={`${choice} ${wallpaper === choice ? "selected" : ""}`} type="button" onClick={() => chooseWallpaper(choice)} aria-label={`Choose ${choice}`}><span>✓</span></button>)}</div></section>
+      <section className="wifi-settings"><div className="wifi-heading"><div><span>Wi-Fi</span><small>{wifi.enabled ? (wifi.connected || "On") : "Off"}</small></div><button className={`wifi-master ${wifi.enabled ? "on" : ""}`} type="button" onClick={toggleWifi} aria-label="Toggle Wi-Fi"><i /></button></div><div className={`hotspot-card ${wifi.hotspot ? "active" : ""}`}><div><span>H</span><div><strong>Cellular Hotspot</strong><small>{device.family !== "phone" ? "Choose an iPhone profile" : wallet.cellular ? (wifi.hotspot ? "Cellular Wi-Fi is sharing" : "Share cellular as Wi-Fi") : "Activate Custom Cellular first"}</small></div></div><button type="button" disabled={device.family !== "phone" || !wallet.cellular} onClick={toggleHotspot}>{wifi.hotspot ? "Turn Off" : "Turn On"}</button></div><div className="local-networks"><div><h3>Local Networks</h3><small>{country}</small></div>{localNetworks.map((network, index) => <button className={wifi.connected === network ? "connected" : ""} type="button" disabled={!wifi.enabled} key={network} onClick={() => connectNetwork(network)}><span>{index === 0 ? "|||" : index === 1 ? "||" : "|"}</span><div><strong>{network}</strong><small>{wifi.connected === network ? "Connected" : "Local Wi-Fi network"}</small></div><b>{wifi.connected === network ? "✓" : "›"}</b></button>)}</div></section>
       <section className="cellular-settings"><div className="coin-wallet"><span>AD</span><div><small>AWESOME DEVELOPMENT COINS</small><strong>{wallet.balance.toFixed(2)}</strong></div></div>{device.family === "phone" ? <div className="cellular-plan"><div><span>📶</span><div><strong>Custom Cellular</strong><small>{wallet.cellular ? "Active • Unlimited virtual data" : "Cellular service for this iPhone"}</small></div></div>{wallet.cellular ? <b>ACTIVE</b> : <button type="button" onClick={activateCellular}>Pay 74.99 Coins</button>}</div> : <p className="iphone-only-note">Custom Cellular is available when an iPhone profile is selected.</p>}{purchaseMessage && <small className="purchase-message">{purchaseMessage}</small>}</section>
       <section className="settings-list toggle-settings">
         <SettingToggle icon="🔔" title="Notifications" detail="App alerts and banners" enabled={preferences.notifications} onToggle={() => toggle("notifications")} />
@@ -634,7 +659,7 @@ function InteractiveSettings({ wallpaper, chooseWallpaper, device, onClose }: { 
         <SettingToggle icon="↻" title="Automatic Updates" detail="Keep Custom Software current" enabled={preferences.autoUpdates} onToggle={() => toggle("autoUpdates")} />
       </section>
       <section className="software-update"><div><span>CS</span><div><small>SOFTWARE UPDATE</small><strong>Custom Software {softwareVersion}</strong><p>Security, app, and device-profile improvements.</p></div></div><button type="button" disabled={updating} onClick={checkForUpdate}>{updating ? "Checking..." : "Check & Install Update"}</button>{updateMessage && <small className="update-message">{updateMessage}</small>}</section>
-      <section className="settings-about"><h3>About</h3><p><span>Software Version</span><strong>{softwareVersion}</strong></p><p><span>Device Profile</span><strong>{device.name}</strong></p><p><span>Storage</span><strong>On-device</strong></p></section>
+      <section className="settings-about"><h3>About</h3><p><span>Software Version</span><strong>{softwareVersion}</strong></p><p><span>Device Profile</span><strong>{device.name}</strong></p><p><span>Country</span><strong>{country}</strong></p><p><span>Storage</span><strong>On-device</strong></p></section>
     </div>
   </div>;
 }
