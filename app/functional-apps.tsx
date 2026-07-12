@@ -276,8 +276,8 @@ export function VidersApp({ onClose }: CloseProps) {
   return <div className="app-window working-window viders-app">
     <AppBar title="Viders" onClose={onClose} action={<button className="app-text-action" type="button" onClick={() => setRefreshKey((value) => value + 1)}>Refresh</button>} />
     <div className="viders-toolbar"><div><span>V</span><strong>Viders</strong><small>Your video platform</small></div><a href={vidersUrl} target="_blank" rel="noreferrer">Open Full App</a></div>
-    <iframe key={refreshKey} title="Viders video platform" src={`${vidersUrl}?source=custom-software`} allow="autoplay; fullscreen; picture-in-picture" />
-    <p className="viders-fallback">If Viders does not appear here, use Open Full App.</p>
+    <iframe key={refreshKey} title="Viders video platform" src="/viders.html?source=custom-software" allow="autoplay; fullscreen; picture-in-picture" />
+    <p className="viders-fallback">The complete Viders app is built in. Open Full App connects to its public site.</p>
   </div>;
 }
 
