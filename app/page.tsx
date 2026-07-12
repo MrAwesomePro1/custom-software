@@ -5,7 +5,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 type Device = {
   id: string;
   name: string;
-  family: "phone" | "tablet";
+  family: "phone" | "tablet" | "laptop";
   width: number;
   height: number;
   island?: boolean;
@@ -46,6 +46,7 @@ const DEVICES: Device[] = [
   { id: "ipad-air-13", name: "iPad Air 13-inch", family: "tablet", width: 1024, height: 1366 },
   { id: "ipad-pro-11", name: "iPad Pro 11-inch", family: "tablet", width: 834, height: 1210 },
   { id: "ipad-pro-13", name: "iPad Pro 13-inch", family: "tablet", width: 1032, height: 1376 },
+  { id: "nitro-v-15", name: "Nitro V 15", family: "laptop", width: 1920, height: 1080 },
 ];
 
 const BUILT_INS = [
@@ -61,6 +62,7 @@ const BUILT_INS = [
   { id: "store", name: "Custom Store", icon: "✦", color: "#2376ff" },
   { id: "files", name: "Files", icon: "📁", color: "#eef5ff" },
   { id: "calculator", name: "Calculator", icon: "🧮", color: "#191b20" },
+  { id: "devices", name: "Device Library", icon: "💻", color: "#5558d9" },
 ];
 
 const STORE_APPS: StoreApp[] = [
@@ -106,6 +108,22 @@ export default function Home() {
   useEffect(() => {
     const tick = window.setInterval(() => setNow(new Date()), 30000);
     return () => window.clearInterval(tick);
+  }, []);
+
+  useEffect(() => {
+    const handleKeyboard = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setActiveApp(null);
+        setControlCenter(false);
+      }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setActiveApp("store");
+        setStoreTab("apps");
+      }
+    };
+    window.addEventListener("keydown", handleKeyboard);
+    return () => window.removeEventListener("keydown", handleKeyboard);
   }, []);
 
   useEffect(() => {
@@ -216,6 +234,9 @@ export default function Home() {
               <optgroup label="iPad">
                 {DEVICES.filter((item) => item.family === "tablet").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
               </optgroup>
+              <optgroup label="Laptop">
+                {DEVICES.filter((item) => item.family === "laptop").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+              </optgroup>
             </select>
           </label>
           <button className="tool-button" type="button" onClick={() => setLandscape((value) => !value)} aria-label="Rotate device"><span>↻</span> Rotate</button>
@@ -262,6 +283,8 @@ export default function Home() {
                   addCustomApp={addCustomApp}
                   wallpaper={wallpaper}
                   chooseWallpaper={chooseWallpaper}
+                  deviceId={deviceId}
+                  setDeviceId={(id) => { setDeviceId(id); setActiveApp(null); }}
                   onClose={() => setActiveApp(null)}
                   app={allStoreApps.find((item) => item.id === activeApp)}
                 />
@@ -279,7 +302,7 @@ export default function Home() {
         <aside className="feature-list">
           <span className="eyebrow">BUILT FOR TOUCH</span>
           <ul>
-            <li><span>01</span><div><strong>Responsive</strong><small>Phone and tablet layouts</small></div></li>
+            <li><span>01</span><div><strong>Responsive</strong><small>Phone, tablet, and laptop layouts</small></div></li>
             <li><span>02</span><div><strong>Persistent</strong><small>Apps stay installed</small></div></li>
             <li><span>03</span><div><strong>Expandable</strong><small>Add apps with code 1234</small></div></li>
           </ul>
@@ -291,12 +314,12 @@ export default function Home() {
 
 function HomeScreen({ device, installedApps, openApp, now }: { device: Device; installedApps: StoreApp[]; openApp: (id: string) => void; now: Date }) {
   const apps = [...BUILT_INS, ...installedApps];
-  const columns = device.family === "tablet" ? 6 : 4;
+  const columns = device.family === "laptop" ? 8 : device.family === "tablet" ? 6 : 4;
   return (
     <div className="home-screen">
       <div className="home-widgets">
         <div className="weather-widget"><span>Chicago</span><strong>76°</strong><small>Mostly Sunny</small></div>
-        {device.family === "tablet" && <div className="calendar-widget"><span>{now.toLocaleDateString("en-US", { weekday: "long" })}</span><strong>{now.getDate()}</strong><small>Make something wonderful today.</small></div>}
+        {device.family !== "phone" && <div className="calendar-widget"><span>{now.toLocaleDateString("en-US", { weekday: "long" })}</span><strong>{now.getDate()}</strong><small>Make something wonderful today.</small></div>}
       </div>
       <div className="app-grid" style={{ "--columns": columns } as React.CSSProperties}>
         {apps.map((app) => (
@@ -321,7 +344,8 @@ type AppViewProps = {
   search: string; setSearch: (value: string) => void; apps: StoreApp[]; installed: string[]; toggleInstall: (app: StoreApp) => void; removeApp: (app: StoreApp) => void;
   devUnlocked: boolean; devCode: string; setDevCode: (value: string) => void; devError: string; unlockDeveloper: (event: FormEvent) => void;
   newApp: { name: string; icon: string; category: string; description: string; color: string }; setNewApp: (value: { name: string; icon: string; category: string; description: string; color: string }) => void;
-  addCustomApp: (event: FormEvent) => void; wallpaper: string; chooseWallpaper: (choice: string) => void; onClose: () => void; app?: StoreApp;
+  addCustomApp: (event: FormEvent) => void; wallpaper: string; chooseWallpaper: (choice: string) => void;
+  deviceId: string; setDeviceId: (id: string) => void; onClose: () => void; app?: StoreApp;
 };
 
 function AppView(props: AppViewProps) {
@@ -330,6 +354,7 @@ function AppView(props: AppViewProps) {
   if (props.id === "calculator") return <Calculator onClose={props.onClose} />;
   if (props.id === "notes") return <Notes onClose={props.onClose} />;
   if (props.id === "weather") return <Weather onClose={props.onClose} />;
+  if (props.id === "devices") return <DeviceLibrary currentDeviceId={props.deviceId} setDeviceId={props.setDeviceId} onClose={props.onClose} />;
   return <GenericApp app={props.app} id={props.id} onClose={props.onClose} />;
 }
 
@@ -412,6 +437,47 @@ function GenericApp({ app, id, onClose }: { app?: StoreApp; id: string; onClose:
   const built = BUILT_INS.find((item) => item.id === id);
   const current = app || (built ? { ...built, category: "Built-in", description: `A beautifully simple ${built.name.toLowerCase()} experience.` } : undefined);
   return <div className="app-window generic-window" style={{ "--app-color": current?.color || "#367cff" } as React.CSSProperties}><AppHeader title={current?.name || "App"} onClose={onClose} /><div className="generic-content"><span className="generic-icon" style={{ background: current?.color }}>{current?.icon || "✦"}</span><h2>{current?.name || "Custom App"}</h2><p>{current?.description || "Welcome to your app."}</p><button type="button" onClick={onClose}>Back to Home</button></div></div>;
+}
+
+function DeviceLibrary({ currentDeviceId, setDeviceId, onClose }: { currentDeviceId: string; setDeviceId: (id: string) => void; onClose: () => void }) {
+  const [downloaded, setDownloaded] = useState<string[]>([currentDeviceId]);
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("custom-software-devices") || "[]") as string[];
+      setDownloaded(Array.from(new Set([currentDeviceId, ...saved])));
+    } catch {
+      setDownloaded([currentDeviceId]);
+    }
+  }, [currentDeviceId]);
+
+  const handleDevice = (device: Device) => {
+    if (!downloaded.includes(device.id)) {
+      const next = [...downloaded, device.id];
+      setDownloaded(next);
+      localStorage.setItem("custom-software-devices", JSON.stringify(next));
+      return;
+    }
+    setDeviceId(device.id);
+  };
+
+  return <div className="app-window device-library-window">
+    <AppHeader title="Device Library" onClose={onClose} trailing={<span className="avatar">DL</span>} />
+    <div className="device-library-scroll">
+      <div className="store-heading"><span>DEVICE LIBRARY</span><h2>More screens. One system.</h2><p>Download a device profile, then switch instantly.</p></div>
+      <div className="device-catalog">
+        {DEVICES.map((device) => {
+          const isDownloaded = downloaded.includes(device.id);
+          const isCurrent = currentDeviceId === device.id;
+          return <article className="device-card" key={device.id}>
+            <div className={`device-card-art ${device.family}`}><span>{device.family === "phone" ? "▯" : device.family === "tablet" ? "▭" : "▱"}</span></div>
+            <div><small>{device.family}</small><strong>{device.name}</strong><p>{device.width} × {device.height}</p></div>
+            <button type="button" className={isCurrent ? "current" : ""} onClick={() => handleDevice(device)} disabled={isCurrent}>{isCurrent ? "CURRENT" : isDownloaded ? "USE" : "DOWNLOAD"}</button>
+          </article>;
+        })}
+      </div>
+    </div>
+  </div>;
 }
 
 function ControlCenter({ close }: { close: () => void }) {

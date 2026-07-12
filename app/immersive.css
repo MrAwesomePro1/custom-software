@@ -1,0 +1,173 @@
+/* Immersive device stage */
+.studio {
+  min-height: 100dvh;
+  background: radial-gradient(circle at 50% 40%, #1b2542 0, #0d1220 44%, #06080e 100%);
+}
+
+.studio-header {
+  position: fixed;
+  z-index: 100;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(94vw, 820px);
+  height: 62px;
+  min-height: 62px;
+  padding: 6px 10px;
+  grid-template-columns: auto 1fr;
+  border: 1px solid rgba(255, 255, 255, .22);
+  border-radius: 19px;
+  color: white;
+  background: rgba(20, 24, 35, .74);
+  box-shadow: 0 18px 55px rgba(0, 0, 0, .3);
+  backdrop-filter: blur(28px) saturate(1.35);
+}
+
+.studio-header .brand-lockup small { color: #aeb5c3; }
+.studio-header .device-tools { justify-self: end; }
+.studio-header .device-select-label,
+.studio-header .tool-button {
+  border-color: rgba(255, 255, 255, .18);
+  color: white;
+  background: rgba(255, 255, 255, .1);
+  box-shadow: none;
+}
+.studio-header .device-select-label span { color: #aeb5c3; }
+.studio-header .device-select-label select { color: white; color-scheme: dark; }
+.studio-status { display: none; }
+
+.preview-stage {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: 1fr;
+  place-items: center;
+  padding: 86px 14px 14px;
+  overflow: hidden;
+}
+.stage-note,
+.feature-list { display: none; }
+.preview-stage::after {
+  width: 95vw;
+  height: 95vw;
+  max-width: 1200px;
+  max-height: 1200px;
+  background: radial-gradient(circle, rgba(68, 98, 255, .16), rgba(92, 122, 255, 0) 68%);
+}
+
+.device-scaler,
+.device-scaler.tablet,
+.device-scaler.is-landscape {
+  width: auto;
+  height: min(calc(100dvh - 108px), var(--device-h));
+  max-width: 96vw;
+  max-height: none;
+  aspect-ratio: var(--device-ratio);
+}
+.device-scaler.laptop {
+  width: min(96vw, 1500px);
+  height: auto;
+  max-height: calc(100dvh - 122px);
+  margin-bottom: 2.2%;
+}
+.device-scaler.laptop.is-landscape {
+  width: min(54vw, 760px);
+  margin-bottom: 0;
+}
+
+/* Nitro V 15 frame */
+.device-frame.laptop {
+  padding: clamp(7px, .6vw, 11px);
+  border-radius: clamp(10px, 1.2vw, 18px);
+  background: linear-gradient(145deg, #3b3f46, #101215 42%, #292c32);
+  box-shadow: 0 35px 80px rgba(0, 0, 0, .42), 0 8px 20px rgba(0, 0, 0, .3), inset 0 0 0 1px rgba(255, 255, 255, .2);
+}
+.device-frame.laptop::before {
+  left: -6%;
+  top: auto;
+  bottom: -7%;
+  width: 112%;
+  height: 7%;
+  border-radius: 2px 2px 14px 14px;
+  background: linear-gradient(#676b72, #272a30 45%, #16181c);
+  box-shadow: 0 12px 20px rgba(0, 0, 0, .28);
+  clip-path: polygon(2% 0, 98% 0, 100% 45%, 96% 100%, 4% 100%, 0 45%);
+}
+.device-frame.laptop::after {
+  right: 49.5%;
+  top: 3px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #252d3a;
+  box-shadow: 0 0 3px #3370aa;
+}
+.laptop .device-screen { border-radius: clamp(4px, .5vw, 8px); }
+.laptop .home-screen { padding: 5% 4% 2.4%; }
+.laptop .home-widgets { min-height: 24%; max-height: 30%; }
+.laptop .weather-widget,
+.laptop .calendar-widget { width: 25%; padding: 2%; border-radius: 16px; }
+.laptop .calendar-widget { width: 31%; }
+.laptop .app-grid { margin-top: 2.5%; gap: 3% 2%; }
+.laptop .app-icon { width: clamp(38px, 4.2vw, 68px); }
+.laptop .dock { width: 42%; min-height: 14%; align-self: center; padding: 1%; border-radius: 20px; }
+.laptop .dock button { width: min(17%, 62px); }
+.laptop .home-indicator { display: none; }
+
+/* Downloadable device profiles */
+.device-library-window { background: linear-gradient(160deg, #f8f9fc, #eceff6); }
+.device-library-scroll { height: 94%; padding: 5%; overflow-y: auto; scrollbar-width: none; }
+.device-catalog { margin-top: 5%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3%; }
+.device-card {
+  min-width: 0;
+  padding: 4%;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 4%;
+  border: 1px solid rgba(30, 38, 60, .08);
+  border-radius: 16px;
+  background: white;
+  box-shadow: 0 7px 20px rgba(30, 38, 60, .06);
+}
+.device-card-art {
+  width: clamp(42px, 7vw, 74px);
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border-radius: 22%;
+  color: white;
+  background: linear-gradient(145deg, #7b62ff, #277dff);
+  font-size: clamp(24px, 4vw, 44px);
+  font-weight: 300;
+}
+.device-card-art.tablet { background: linear-gradient(145deg, #22b9bf, #2878ff); }
+.device-card-art.laptop { background: linear-gradient(145deg, #313848, #7d55f4); }
+.device-card > div:nth-child(2) { min-width: 0; display: grid; }
+.device-card small { color: #858b97; font-size: clamp(6px, .8vw, 9px); font-weight: 850; letter-spacing: .09em; text-transform: uppercase; }
+.device-card strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: clamp(9px, 1.25vw, 15px); }
+.device-card p { margin: 2px 0 0; color: #9196a1; font-size: clamp(6px, .85vw, 10px); }
+.device-card button {
+  padding: 6px 11px;
+  border: 0;
+  border-radius: 999px;
+  color: #2871ef;
+  background: #e7ebf3;
+  font-size: clamp(6px, .8vw, 9px);
+  font-weight: 850;
+  cursor: pointer;
+}
+.device-card button.current { color: #7b808a; background: #eceef2; cursor: default; }
+
+@media (max-width: 760px) {
+  .studio-header { width: calc(100vw - 16px); top: 8px; }
+  .studio-header .brand-lockup { display: none; }
+  .studio-header { grid-template-columns: 1fr; }
+  .studio-header .device-tools { width: 100%; }
+  .device-select-label { min-width: 0; flex: 1; }
+  .preview-stage { padding: 80px 4px 8px; }
+  .device-scaler,
+  .device-scaler.tablet,
+  .device-scaler.laptop,
+  .device-scaler.is-landscape { max-width: 98vw; max-height: calc(100dvh - 96px); }
+  .device-catalog { grid-template-columns: 1fr; }
+}
