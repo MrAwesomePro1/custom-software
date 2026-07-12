@@ -3,6 +3,9 @@ import { headers } from "next/headers";
 import "./globals.css";
 import "./immersive.css";
 import "./functional-apps.css";
+import "./social-settings.css";
+import "./accounts-wallet.css";
+import "./software-viders.css";
 
 export async function generateMetadata(): Promise<Metadata> {
   const requestHeaders = await headers();

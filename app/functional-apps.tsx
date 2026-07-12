@@ -179,3 +179,117 @@ export function CustomWorkspaceApp({ app, onClose }: { app: AppInfo; onClose: ()
   const [launches, setLaunches] = useStoredState(`cs-custom-launches-${app.id}`, 1);
   return <div className="app-window working-window custom-workspace" style={{ "--custom-color": app.color } as React.CSSProperties}><AppBar title={app.name} onClose={onClose} action={<span className="saved-label">Saved</span>} /><div className="custom-app-hero"><span style={{ background: app.color }}>{app.icon}</span><div><h2>{app.name}</h2><p>{app.description || "Your custom app workspace."}</p></div></div><textarea value={content} onChange={(event) => setContent(event.target.value)} /><button type="button" onClick={() => setLaunches(launches + 1)}>Run Action <span>{launches} runs</span></button></div>;
 }
+
+type ContactEntry = { id: number; name: string; phone: string; email: string; color: string };
+type ChatEntry = { id: number; name: string; members: number[]; group: boolean; messages: Array<{ id: number; mine: boolean; text: string }> };
+
+const DEFAULT_CONTACTS: ContactEntry[] = [
+  { id: 1, name: "Alex", phone: "555-0101", email: "alex@example.com", color: "#5b7cff" },
+  { id: 2, name: "Jordan", phone: "555-0142", email: "jordan@example.com", color: "#e95683" },
+  { id: 3, name: "Taylor", phone: "555-0188", email: "taylor@example.com", color: "#20aa7a" },
+];
+
+const DEFAULT_CHATS: ChatEntry[] = [
+  { id: 1, name: "Alex", members: [1], group: false, messages: [{ id: 1, mine: false, text: "Hey! Custom Software is looking great." }] },
+  { id: 2, name: "Project Team", members: [1, 2, 3], group: true, messages: [{ id: 2, mine: false, text: "Welcome to the group chat!" }] },
+];
+
+export function MessagesHubApp({ onClose }: CloseProps) {
+  const [contacts] = useStoredState<ContactEntry[]>("cs-contacts", DEFAULT_CONTACTS);
+  const [chats, setChats] = useStoredState<ChatEntry[]>("cs-chats", DEFAULT_CHATS);
+  const [activeId, setActiveId] = useState(1);
+  const [draft, setDraft] = useState("");
+  const [makingGroup, setMakingGroup] = useState(false);
+  const [groupName, setGroupName] = useState("");
+  const [members, setMembers] = useState<number[]>([]);
+  const active = chats.find((chat) => chat.id === activeId);
+
+  const send = (event: FormEvent) => {
+    event.preventDefault();
+    if (!active || !draft.trim()) return;
+    setChats(chats.map((chat) => chat.id === active.id ? { ...chat, messages: [...chat.messages, { id: Date.now(), mine: true, text: draft.trim() }] } : chat));
+    setDraft("");
+  };
+  const createGroup = (event: FormEvent) => {
+    event.preventDefault();
+    if (!groupName.trim() || members.length < 1) return;
+    const chat: ChatEntry = { id: Date.now(), name: groupName.trim(), members, group: true, messages: [{ id: Date.now() + 1, mine: false, text: `Group created with ${members.length} contact${members.length === 1 ? "" : "s"}.` }] };
+    setChats([...chats, chat]); setActiveId(chat.id); setGroupName(""); setMembers([]); setMakingGroup(false);
+  };
+
+  return <div className="app-window working-window messages-hub"><AppBar title="Messages" onClose={onClose} action={<button className="app-text-action" type="button" onClick={() => setMakingGroup(true)}>New Group</button>} />
+    <div className="messages-hub-layout">
+      <aside><h3>Chats</h3>{chats.map((chat) => <button className={activeId === chat.id ? "selected" : ""} type="button" key={chat.id} onClick={() => { setActiveId(chat.id); setMakingGroup(false); }}><span style={{ background: chat.group ? "#725cff" : contacts.find((contact) => contact.id === chat.members[0])?.color || "#4a8cff" }}>{chat.group ? "👥" : chat.name.slice(0, 1)}</span><div><strong>{chat.name}</strong><small>{chat.messages[chat.messages.length - 1]?.text || "New conversation"}</small></div></button>)}</aside>
+      <section>{makingGroup ? <form className="group-builder" onSubmit={createGroup}><h2>New Group Chat</h2><label>Group name<input value={groupName} onChange={(event) => setGroupName(event.target.value)} placeholder="Friends, Team, Family..." /></label><h3>Add contacts</h3><div>{contacts.map((contact) => <label key={contact.id}><input type="checkbox" checked={members.includes(contact.id)} onChange={() => setMembers(members.includes(contact.id) ? members.filter((id) => id !== contact.id) : [...members, contact.id])} /><span style={{ background: contact.color }}>{contact.name.slice(0, 1)}</span>{contact.name}</label>)}</div><button type="submit" disabled={!groupName.trim() || !members.length}>Create Group</button></form> : active ? <><header><span>{active.group ? "👥" : active.name.slice(0, 1)}</span><div><strong>{active.name}</strong><small>{active.group ? `${active.members.length} members` : "Contact"}</small></div></header><div className="hub-thread">{active.messages.map((message) => <div className={`message-bubble ${message.mine ? "mine" : "theirs"}`} key={message.id}>{message.text}</div>)}</div><form className="message-compose hub-compose" onSubmit={send}><input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={`Message ${active.name}`} /><button type="submit">↑</button></form></> : <div className="working-empty">Choose a conversation.</div>}</section>
+    </div>
+  </div>;
+}
+
+export function ContactsApp({ onClose }: CloseProps) {
+  const [contacts, setContacts] = useStoredState<ContactEntry[]>("cs-contacts", DEFAULT_CONTACTS);
+  const [selectedId, setSelectedId] = useState(contacts[0]?.id || 0);
+  const [adding, setAdding] = useState(false);
+  const [status, setStatus] = useState("");
+  const [draft, setDraft] = useState({ name: "", phone: "", email: "" });
+  const selected = contacts.find((contact) => contact.id === selectedId);
+  const colors = ["#5b7cff", "#e95683", "#20aa7a", "#f09a38", "#8a5ce6"];
+
+  const add = (event: FormEvent) => {
+    event.preventDefault();
+    if (!draft.name.trim()) return;
+    const contact: ContactEntry = { id: Date.now(), name: draft.name.trim(), phone: draft.phone.trim() || "No phone", email: draft.email.trim() || "No email", color: colors[contacts.length % colors.length] };
+    setContacts([...contacts, contact]); setSelectedId(contact.id); setDraft({ name: "", phone: "", email: "" }); setAdding(false);
+  };
+  const startChat = (contact: ContactEntry) => {
+    const chats = JSON.parse(localStorage.getItem("cs-chats") || JSON.stringify(DEFAULT_CHATS)) as ChatEntry[];
+    const existing = chats.find((chat) => !chat.group && chat.members.includes(contact.id));
+    if (!existing) chats.push({ id: Date.now(), name: contact.name, members: [contact.id], group: false, messages: [{ id: Date.now() + 1, mine: false, text: `You can now message ${contact.name}.` }] });
+    localStorage.setItem("cs-chats", JSON.stringify(chats)); setStatus("Conversation added to Messages");
+  };
+
+  return <div className="app-window working-window contacts-app"><AppBar title="Contacts" onClose={onClose} action={<button className="app-text-action" type="button" onClick={() => setAdding(true)}>Add Contact</button>} />
+    <div className="contacts-layout"><aside><label className="contacts-search">⌕<input placeholder="Search contacts" /></label>{contacts.map((contact) => <button className={selectedId === contact.id ? "selected" : ""} type="button" key={contact.id} onClick={() => { setSelectedId(contact.id); setAdding(false); setStatus(""); }}><span style={{ background: contact.color }}>{contact.name.slice(0, 1)}</span><strong>{contact.name}</strong></button>)}</aside><section>{adding ? <form className="contact-form" onSubmit={add}><div className="contact-avatar new">+</div><h2>New Contact</h2><label>Name<input required value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></label><label>Phone<input inputMode="tel" value={draft.phone} onChange={(event) => setDraft({ ...draft, phone: event.target.value })} /></label><label>Email<input inputMode="email" value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} /></label><button type="submit">Save Contact</button></form> : selected ? <div className="contact-detail"><div className="contact-avatar" style={{ background: selected.color }}>{selected.name.slice(0, 1)}</div><h2>{selected.name}</h2><p>{selected.phone}</p><p>{selected.email}</p><div><button type="button" onClick={() => startChat(selected)}>💬 Message</button><button type="button" onClick={() => setStatus(`Calling ${selected.phone}`)}>☎ Call</button></div>{status && <small>{status}</small>}<button className="delete-contact" type="button" onClick={() => { setContacts(contacts.filter((contact) => contact.id !== selected.id)); setSelectedId(0); }}>Delete Contact</button></div> : <div className="working-empty">Add your first contact.</div>}</section></div>
+  </div>;
+}
+
+export function WalletApp({ onClose }: CloseProps) {
+  const [wallet, setWallet] = useStoredState("cs-awesome-wallet", { balance: 100, cellular: false });
+  const [transactions, setTransactions] = useStoredState<Array<{ id: number; title: string; amount: number; date: string }>>("cs-wallet-transactions", [
+    { id: 1, title: "Welcome Bonus", amount: 100, date: "Today" },
+  ]);
+  const [message, setMessage] = useState("");
+  const claimReward = () => {
+    const today = new Date().toDateString();
+    if (localStorage.getItem("cs-wallet-last-reward") === today) { setMessage("Daily reward already collected."); return; }
+    const next = { ...wallet, balance: Math.round((wallet.balance + 5) * 100) / 100 };
+    setWallet(next); setTransactions([{ id: Date.now(), title: "Daily Reward", amount: 5, date: new Date().toLocaleDateString() }, ...transactions]);
+    localStorage.setItem("cs-wallet-last-reward", today); setMessage("5 Awesome Development Coins added.");
+  };
+  return <div className="app-window working-window wallet-app"><AppBar title="Wallet" onClose={onClose} action={<span className="saved-label">On-device</span>} />
+    <div className="wallet-scroll"><div className="awesome-card"><small>AWESOME DEVELOPMENT COINS</small><strong>{wallet.balance.toFixed(2)}</strong><span>AD COINS</span><i>CS</i></div><div className="wallet-actions"><button type="button" onClick={claimReward}>+ Daily Reward</button><button type="button" disabled={!wallet.cellular}>📶 {wallet.cellular ? "Cellular Active" : "No Cellular Plan"}</button></div>{message && <p className="wallet-message">{message}</p>}<section className="transactions"><h3>Recent Activity</h3>{transactions.map((item) => <article key={item.id}><span>{item.amount >= 0 ? "+" : "−"}</span><div><strong>{item.title}</strong><small>{item.date}</small></div><b className={item.amount >= 0 ? "credit" : ""}>{item.amount >= 0 ? "+" : ""}{item.amount.toFixed(2)}</b></article>)}</section></div>
+  </div>;
+}
+
+export function VidersApp({ onClose }: CloseProps) {
+  const [refreshKey, setRefreshKey] = useState(0);
+  const vidersUrl = "https://pagedrop.dev/s/awesomeviders/";
+  return <div className="app-window working-window viders-app">
+    <AppBar title="Viders" onClose={onClose} action={<button className="app-text-action" type="button" onClick={() => setRefreshKey((value) => value + 1)}>Refresh</button>} />
+    <div className="viders-toolbar"><div><span>V</span><strong>Viders</strong><small>Your video platform</small></div><a href={vidersUrl} target="_blank" rel="noreferrer">Open Full App</a></div>
+    <iframe key={refreshKey} title="Viders video platform" src={`${vidersUrl}?source=custom-software`} allow="autoplay; fullscreen; picture-in-picture" />
+    <p className="viders-fallback">If Viders does not appear here, use Open Full App.</p>
+  </div>;
+}
+
+export function HealthApp({ onClose }: CloseProps) {
+  const [steps, setSteps] = useStoredState("cs-health-steps", 3420);
+  const [sleepHours, setSleepHours] = useState(8);
+  const [sleepLog, setSleepLog] = useStoredState<Array<{ id: number; date: string; hours: number }>>("cs-health-sleep", [
+    { id: 1, date: "Last night", hours: 7.5 },
+  ]);
+  const goal = 8000; const progress = Math.min(100, Math.round(steps / goal * 100));
+  const logSleep = () => setSleepLog([{ id: Date.now(), date: new Date().toLocaleDateString(), hours: sleepHours }, ...sleepLog].slice(0, 7));
+  return <div className="app-window working-window health-app"><AppBar title="Health" onClose={onClose} action={<span className="iphone-badge">iPhone</span>} />
+    <div className="health-scroll"><div className="health-summary"><small>TODAY</small><h2>Your Health</h2><div className="health-metrics"><article><span>👟</span><div><small>STEPS</small><strong>{steps.toLocaleString()}</strong><p>{progress}% of {goal.toLocaleString()}</p></div></article><article><span>🌙</span><div><small>SLEEP</small><strong>{sleepLog[0]?.hours || 0} hr</strong><p>{sleepLog[0]?.date || "No sleep logged"}</p></div></article></div></div><section className="step-tracker"><div><h3>Daily Steps</h3><strong>{progress}%</strong></div><i><span style={{ width: `${progress}%` }} /></i><div className="step-buttons"><button type="button" onClick={() => setSteps(steps + 100)}>+100</button><button type="button" onClick={() => setSteps(steps + 500)}>+500 Steps</button><button type="button" onClick={() => setSteps(0)}>Reset</button></div></section><section className="sleep-tracker"><h3>Log Sleep</h3><label><span>{sleepHours.toFixed(1)} hours</span><input type="range" min="1" max="14" step="0.5" value={sleepHours} onChange={(event) => setSleepHours(Number(event.target.value))} /></label><button type="button" onClick={logSleep}>Save Last Night</button><div>{sleepLog.map((entry) => <article key={entry.id}><span>{entry.date}</span><strong>{entry.hours.toFixed(1)} hr</strong></article>)}</div></section></div>
+  </div>;
+}

@@ -2,9 +2,9 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
-  CalendarApp, CameraApp, ClockApp, CustomWorkspaceApp, FilesApp, FitnessApp, FocusApp,
-  MapsApp, MessagesApp, MusicApp, NotesApp, PhotosApp, RecipeApp, SketchpadApp,
-  StargazerApp, TowerGameApp, WeatherApp,
+  CalendarApp, CameraApp, ClockApp, ContactsApp, CustomWorkspaceApp, FilesApp, FitnessApp, FocusApp,
+  MapsApp, MessagesHubApp, MusicApp, NotesApp, PhotosApp, RecipeApp, SketchpadApp,
+  HealthApp, StargazerApp, TowerGameApp, VidersApp, WalletApp, WeatherApp,
 } from "./functional-apps";
 
 interface InstallPromptEvent extends Event {
@@ -15,7 +15,7 @@ interface InstallPromptEvent extends Event {
 type Device = {
   id: string;
   name: string;
-  family: "phone" | "tablet" | "laptop";
+  family: "phone" | "tablet" | "laptop" | "console";
   width: number;
   height: number;
   island?: boolean;
@@ -30,7 +30,12 @@ type StoreApp = {
   color: string;
   featured?: boolean;
   custom?: boolean;
+  deviceFamily?: "phone";
 };
+
+type FamilyAccount = { id: string; name: string; age: number; pin: string; role: "adult" | "child"; familyIds: string[] };
+type FamilyGroup = { id: string; name: string; memberIds: string[]; guardianIds: string[] };
+type FamilyState = { accounts: FamilyAccount[]; families: FamilyGroup[]; currentAccountId: string; activeFamilyId: string };
 
 const DEVICES: Device[] = [
   { id: "iphone-14", name: "iPhone 14", family: "phone", width: 390, height: 844 },
@@ -57,6 +62,8 @@ const DEVICES: Device[] = [
   { id: "ipad-pro-11", name: "iPad Pro 11-inch", family: "tablet", width: 834, height: 1210 },
   { id: "ipad-pro-13", name: "iPad Pro 13-inch", family: "tablet", width: 1032, height: 1376 },
   { id: "nitro-v-15", name: "Nitro V 15", family: "laptop", width: 1920, height: 1080 },
+  { id: "switch-1", name: "Nintendo Switch", family: "console", width: 1280, height: 720 },
+  { id: "switch-2", name: "Nintendo Switch 2", family: "console", width: 1920, height: 1080 },
 ];
 
 const BUILT_INS = [
@@ -73,6 +80,9 @@ const BUILT_INS = [
   { id: "files", name: "Files", icon: "📁", color: "#eef5ff" },
   { id: "calculator", name: "Calculator", icon: "🧮", color: "#191b20" },
   { id: "devices", name: "Device Library", icon: "💻", color: "#5558d9" },
+  { id: "contacts", name: "Contacts", icon: "👤", color: "#8d94a2" },
+  { id: "wallet", name: "Wallet", icon: "🪙", color: "#17191f" },
+  { id: "family", name: "Family", icon: "👨‍👩‍👧", color: "#5a65e8" },
 ];
 
 const STORE_APPS: StoreApp[] = [
@@ -84,6 +94,8 @@ const STORE_APPS: StoreApp[] = [
   { id: "focus", name: "Focus Flow", icon: "🫧", category: "Productivity", description: "Simple timers that make big tasks feel manageable.", color: "#20b99a" },
   { id: "stargazer", name: "Stargazer", icon: "🔭", category: "Education", description: "Explore tonight’s sky with interactive star guides.", color: "#272068" },
   { id: "recipebox", name: "Recipe Box", icon: "🥗", category: "Food", description: "Save family favorites and discover something delicious.", color: "#56ad55" },
+  { id: "health-plus", name: "Health", icon: "❤️", category: "Health", description: "Track daily steps, sleep duration, and healthy trends on iPhone.", color: "#ffffff", deviceFamily: "phone" },
+  { id: "viders", name: "Viders", icon: "▶", category: "Entertainment", description: "Watch videos and creators in the Viders platform you made.", color: "#ff245e", featured: true },
 ];
 
 const WALLPAPERS = [
@@ -111,11 +123,15 @@ export default function Home() {
   const [toast, setToast] = useState("");
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   const [installHelp, setInstallHelp] = useState(false);
+  const [familyState, setFamilyState] = useState<FamilyState | null>(null);
+  const [familyReady, setFamilyReady] = useState(false);
+  const [signedIn, setSignedIn] = useState(false);
   const [now, setNow] = useState(new Date());
   const [newApp, setNewApp] = useState({ name: "", icon: "🚀", category: "Utilities", description: "", color: "#6c5ce7" });
 
   const device = DEVICES.find((item) => item.id === deviceId) ?? DEVICES[0];
   const allStoreApps = useMemo(() => [...STORE_APPS, ...customApps], [customApps]);
+  const currentAccount = familyState?.accounts.find((account) => account.id === familyState.currentAccountId);
 
   useEffect(() => {
     const tick = window.setInterval(() => setNow(new Date()), 30000);
@@ -133,6 +149,15 @@ export default function Home() {
         setActiveApp("store");
         setStoreTab("apps");
       }
+      if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
+        const controls = Array.from(document.querySelectorAll<HTMLElement>(".device-screen button:not(:disabled), .device-screen input, .device-screen textarea, .device-screen select"));
+        if (!controls.length) return;
+        const current = controls.indexOf(document.activeElement as HTMLElement);
+        const direction = event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1;
+        controls[(current + direction + controls.length) % controls.length]?.focus();
+        event.preventDefault();
+      }
+      if (event.key === "Backspace" && document.activeElement?.tagName === "BODY") setActiveApp(null);
     };
     window.addEventListener("keydown", handleKeyboard);
     return () => window.removeEventListener("keydown", handleKeyboard);
@@ -147,6 +172,20 @@ export default function Home() {
     window.addEventListener("beforeinstallprompt", captureInstall);
     return () => window.removeEventListener("beforeinstallprompt", captureInstall);
   }, []);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("cs-family-state");
+      if (saved) setFamilyState(JSON.parse(saved));
+      setSignedIn(sessionStorage.getItem("cs-account-session") === "active");
+    } catch { /* show account setup */ }
+    setFamilyReady(true);
+  }, []);
+
+  const updateFamilyState = (next: FamilyState) => {
+    setFamilyState(next);
+    localStorage.setItem("cs-family-state", JSON.stringify(next));
+  };
 
   const installApp = async () => {
     if (!installPrompt) { setInstallHelp(true); return; }
@@ -181,6 +220,7 @@ export default function Home() {
       setActiveApp(app.id);
       return;
     }
+    if (app.deviceFamily === "phone" && device.family !== "phone") { notify("Health is available only on iPhone profiles"); return; }
     setInstalled((current) => [...current, app.id]);
     notify(`${app.name} installed`);
   };
@@ -238,6 +278,10 @@ export default function Home() {
     "--device-ratio": `${(landscape ? device.height : device.width) / (landscape ? device.width : device.height)}`,
   } as React.CSSProperties;
 
+  if (!familyReady) return <div className="account-loading"><span className="brand-mark">CS</span><p>Starting Custom Software...</p></div>;
+  if (!familyState) return <AccountSetup onComplete={(next) => { updateFamilyState(next); sessionStorage.setItem("cs-account-session", "active"); setSignedIn(true); }} />;
+  if (!signedIn) return <AccountLogin state={familyState} onSuccess={(next) => { updateFamilyState(next); sessionStorage.setItem("cs-account-session", "active"); setSignedIn(true); }} />;
+
   return (
     <main className="studio">
       <header className="studio-header">
@@ -246,6 +290,7 @@ export default function Home() {
           <div><strong>Custom Software</strong><small>Device Studio</small></div>
         </div>
         <div className="device-tools" aria-label="Device controls">
+          <button className="account-chip" type="button" onClick={() => openApp("family")}><span>{currentAccount?.name.slice(0, 1) || "U"}</span><div><strong>{currentAccount?.name || "Account"}</strong><small>{currentAccount?.age || 0} years</small></div></button>
           <label className="device-select-label">
             <span>Preview device</span>
             <select value={deviceId} onChange={(event) => { setDeviceId(event.target.value); setActiveApp(null); }} aria-label="Choose a device">
@@ -267,6 +312,9 @@ export default function Home() {
               <optgroup label="Laptop">
                 {DEVICES.filter((item) => item.family === "laptop").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
               </optgroup>
+              <optgroup label="Game Console">
+                {DEVICES.filter((item) => item.family === "console").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+              </optgroup>
             </select>
           </label>
           <button className="tool-button" type="button" onClick={() => setLandscape((value) => !value)} aria-label="Rotate device"><span>↻</span> Rotate</button>
@@ -284,7 +332,7 @@ export default function Home() {
         </aside>
 
         <div className={`device-scaler ${device.family} ${landscape ? "is-landscape" : ""}`} style={scaleStyle}>
-          <div className={`device-frame ${device.family}`}>
+          <div className={`device-frame ${device.family} device-${device.id}`}>
             <div className={`device-screen ${wallpaper}`}>
               <div className="status-bar">
                 <button className="status-time" type="button" onClick={() => setControlCenter((value) => !value)} aria-label="Open Control Center">{pad(now.getHours())}:{pad(now.getMinutes())}</button>
@@ -316,6 +364,9 @@ export default function Home() {
                   chooseWallpaper={chooseWallpaper}
                   deviceId={deviceId}
                   setDeviceId={(id) => { setDeviceId(id); setActiveApp(null); }}
+                  familyState={familyState}
+                  setFamilyState={updateFamilyState}
+                  signOut={() => { sessionStorage.removeItem("cs-account-session"); setSignedIn(false); setActiveApp(null); }}
                   onClose={() => setActiveApp(null)}
                   app={allStoreApps.find((item) => item.id === activeApp)}
                 />
@@ -344,9 +395,49 @@ export default function Home() {
   );
 }
 
+function AccountSetup({ onComplete }: { onComplete: (state: FamilyState) => void }) {
+  const [name, setName] = useState(""); const [age, setAge] = useState(18); const [pin, setPin] = useState("");
+  const [guardianName, setGuardianName] = useState(""); const [guardianAge, setGuardianAge] = useState(18); const [guardianPin, setGuardianPin] = useState(""); const [error, setError] = useState("");
+  const submit = (event: FormEvent) => {
+    event.preventDefault(); setError("");
+    if (!name.trim() || age < 1 || age > 120 || !/^\d{4}$/.test(pin)) { setError("Enter a name, valid age, and 4-digit PIN."); return; }
+    const familyId = `family-${Date.now()}`; const accountId = `account-${Date.now()}`;
+    if (age >= 18) {
+      const account: FamilyAccount = { id: accountId, name: name.trim(), age, pin, role: "adult", familyIds: [familyId] };
+      onComplete({ accounts: [account], families: [{ id: familyId, name: `${name.trim()} Family`, memberIds: [accountId], guardianIds: [accountId] }], currentAccountId: accountId, activeFamilyId: familyId });
+      return;
+    }
+    if (!guardianName.trim() || guardianAge < 18 || !/^\d{4}$/.test(guardianPin)) { setError("A guardian age 18+ and guardian PIN are required for a child account."); return; }
+    const guardianId = `guardian-${Date.now()}`;
+    const child: FamilyAccount = { id: accountId, name: name.trim(), age, pin, role: "child", familyIds: [familyId] };
+    const guardian: FamilyAccount = { id: guardianId, name: guardianName.trim(), age: guardianAge, pin: guardianPin, role: "adult", familyIds: [familyId] };
+    onComplete({ accounts: [guardian, child], families: [{ id: familyId, name: `${guardianName.trim()} Family`, memberIds: [guardianId, accountId], guardianIds: [guardianId] }], currentAccountId: accountId, activeFamilyId: familyId });
+  };
+  return <main className="account-setup"><div className="account-panel"><span className="brand-mark">CS</span><div className="setup-heading"><small>WELCOME TO</small><h1>Custom Software</h1><p>Create the first account to start the system. Account and age data stay on this device.</p></div><form onSubmit={submit}><div className="setup-grid"><label>Your name<input required value={name} onChange={(event) => setName(event.target.value)} placeholder="Name" /></label><label>Your age<input required type="number" min="1" max="120" value={age} onChange={(event) => setAge(Number(event.target.value))} /></label></div><label>Choose a 4-digit PIN<input required inputMode="numeric" maxLength={4} value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="0000" /></label>{age < 18 && <fieldset><legend>Guardian setup</legend><p>A parent or guardian must create the family for this child account.</p><div className="setup-grid"><label>Guardian name<input required value={guardianName} onChange={(event) => setGuardianName(event.target.value)} /></label><label>Guardian age<input required type="number" min="18" max="120" value={guardianAge} onChange={(event) => setGuardianAge(Number(event.target.value))} /></label></div><label>Guardian 4-digit PIN<input required inputMode="numeric" maxLength={4} value={guardianPin} onChange={(event) => setGuardianPin(event.target.value.replace(/\D/g, "").slice(0, 4))} /></label></fieldset>}{error && <p className="account-error">{error}</p>}<button className="setup-submit" type="submit">Create Account & Start</button></form></div></main>;
+}
+
+function AccountLogin({ state, onSuccess }: { state: FamilyState; onSuccess: (state: FamilyState) => void }) {
+  const family = state.families.find((item) => item.id === state.activeFamilyId) || state.families[0];
+  const accounts = state.accounts.filter((account) => family?.memberIds.includes(account.id));
+  const [selected, setSelected] = useState(state.currentAccountId || accounts[0]?.id || ""); const [pin, setPin] = useState(""); const [error, setError] = useState("");
+  const login = (event: FormEvent) => { event.preventDefault(); const account = state.accounts.find((item) => item.id === selected); if (!account || account.pin !== pin) { setError("That PIN is not correct."); return; } onSuccess({ ...state, currentAccountId: account.id }); };
+  return <main className="account-setup account-login"><div className="account-panel"><span className="brand-mark">CS</span><div className="setup-heading"><small>{family?.name || "FAMILY"}</small><h1>Who is using this device?</h1><p>Choose an account and enter its PIN.</p></div><div className="account-choices">{accounts.map((account) => <button className={selected === account.id ? "selected" : ""} type="button" key={account.id} onClick={() => { setSelected(account.id); setPin(""); setError(""); }}><span>{account.name.slice(0, 1)}</span><strong>{account.name}</strong><small>{account.role} • age {account.age}</small></button>)}</div><form onSubmit={login}><label>4-digit PIN<input autoFocus inputMode="numeric" maxLength={4} value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="••••" /></label>{error && <p className="account-error">{error}</p>}<button className="setup-submit" type="submit">Enter Custom Software</button></form></div></main>;
+}
+
+function FamilyApp({ state, onChange, signOut, onClose }: { state: FamilyState; onChange: (state: FamilyState) => void; signOut: () => void; onClose: () => void }) {
+  const current = state.accounts.find((account) => account.id === state.currentAccountId)!;
+  const family = state.families.find((item) => item.id === state.activeFamilyId)!;
+  const members = state.accounts.filter((account) => family.memberIds.includes(account.id));
+  const [child, setChild] = useState({ name: "", age: 8, pin: "" }); const [familyName, setFamilyName] = useState(""); const [message, setMessage] = useState("");
+  const addChild = (event: FormEvent) => { event.preventDefault(); if (current.role !== "adult" || !child.name.trim() || child.age >= 18 || child.age < 1 || !/^\d{4}$/.test(child.pin)) { setMessage("Child accounts need a name, age under 18, and 4-digit PIN."); return; } const id = `child-${Date.now()}`; const account: FamilyAccount = { id, name: child.name.trim(), age: child.age, pin: child.pin, role: "child", familyIds: [family.id] }; onChange({ ...state, accounts: [...state.accounts, account], families: state.families.map((item) => item.id === family.id ? { ...item, memberIds: [...item.memberIds, id] } : item) }); setChild({ name: "", age: 8, pin: "" }); setMessage("Child account added."); };
+  const createFamily = (event: FormEvent) => { event.preventDefault(); if (current.role !== "adult" || !familyName.trim()) return; const id = `family-${Date.now()}`; const nextAccount = { ...current, familyIds: [...current.familyIds, id] }; onChange({ accounts: state.accounts.map((account) => account.id === current.id ? nextAccount : account), families: [...state.families, { id, name: familyName.trim(), memberIds: [current.id], guardianIds: [current.id] }], currentAccountId: current.id, activeFamilyId: id }); setFamilyName(""); };
+  const switchFamily = (id: string) => { if (current.age < 18 || !current.familyIds.includes(id)) return; onChange({ ...state, activeFamilyId: id }); };
+  return <div className="app-window family-app"><AppHeader title="Family" onClose={onClose} trailing={<span className="avatar">{current.name.slice(0, 1)}</span>} /><div className="family-scroll"><div className="family-hero"><span>👨‍👩‍👧</span><div><small>ACTIVE FAMILY</small><h2>{family.name}</h2><p>{members.length} member{members.length === 1 ? "" : "s"}</p></div></div><section><h3>Family Members</h3><div className="family-members">{members.map((member) => <article key={member.id}><span>{member.name.slice(0, 1)}</span><div><strong>{member.name}</strong><small>{member.role} • age {member.age}</small></div>{family.guardianIds.includes(member.id) && <b>GUARDIAN</b>}</article>)}</div></section>{current.role === "adult" ? <><section><h3>Add Child Account</h3><form className="family-form" onSubmit={addChild}><input value={child.name} onChange={(event) => setChild({ ...child, name: event.target.value })} placeholder="Child name" /><input type="number" min="1" max="17" value={child.age} onChange={(event) => setChild({ ...child, age: Number(event.target.value) })} aria-label="Child age" /><input inputMode="numeric" maxLength={4} value={child.pin} onChange={(event) => setChild({ ...child, pin: event.target.value.replace(/\D/g, "").slice(0, 4) })} placeholder="4-digit PIN" /><button type="submit">Add Child</button></form>{message && <p className="family-message">{message}</p>}</section><section><h3>Switch Family</h3><div className="family-switcher">{state.families.filter((item) => current.familyIds.includes(item.id)).map((item) => <button className={item.id === family.id ? "active" : ""} type="button" key={item.id} onClick={() => switchFamily(item.id)}><span>{item.name.slice(0, 1)}</span><strong>{item.name}</strong><small>{item.id === family.id ? "Active" : "Switch"}</small></button>)}</div><form className="new-family-form" onSubmit={createFamily}><input value={familyName} onChange={(event) => setFamilyName(event.target.value)} placeholder="New family name" /><button type="submit">Create Family</button></form></section></> : <section className="child-family-note"><h3>Child Account</h3><p>A guardian manages accounts and family switching. Adults age 18+ can create or switch families.</p></section>}<button className="family-signout" type="button" onClick={signOut}>Switch Account / Sign Out</button></div></div>;
+}
+
 function HomeScreen({ device, installedApps, openApp, now }: { device: Device; installedApps: StoreApp[]; openApp: (id: string) => void; now: Date }) {
-  const apps = [...BUILT_INS, ...installedApps];
-  const columns = device.family === "laptop" ? 8 : device.family === "tablet" ? 6 : 4;
+  const apps = [...BUILT_INS, ...installedApps.filter((app) => !app.deviceFamily || app.deviceFamily === device.family)];
+  const columns = device.family === "laptop" ? 8 : device.family === "console" ? 6 : device.family === "tablet" ? 6 : 4;
   return (
     <div className="home-screen">
       <div className="home-widgets">
@@ -377,19 +468,24 @@ type AppViewProps = {
   devUnlocked: boolean; devCode: string; setDevCode: (value: string) => void; devError: string; unlockDeveloper: (event: FormEvent) => void;
   newApp: { name: string; icon: string; category: string; description: string; color: string }; setNewApp: (value: { name: string; icon: string; category: string; description: string; color: string }) => void;
   addCustomApp: (event: FormEvent) => void; wallpaper: string; chooseWallpaper: (choice: string) => void;
-  deviceId: string; setDeviceId: (id: string) => void; onClose: () => void; app?: StoreApp;
+  deviceId: string; setDeviceId: (id: string) => void; familyState: FamilyState; setFamilyState: (state: FamilyState) => void; signOut: () => void; onClose: () => void; app?: StoreApp;
 };
 
 function AppView(props: AppViewProps) {
   if (props.id === "store") return <CustomStore {...props} />;
-  if (props.id === "messages") return <MessagesApp onClose={props.onClose} />;
+  if (props.id === "messages") return <MessagesHubApp onClose={props.onClose} />;
+  if (props.id === "contacts") return <ContactsApp onClose={props.onClose} />;
+  if (props.id === "wallet") return <WalletApp onClose={props.onClose} />;
+  if (props.id === "health-plus") return <HealthApp onClose={props.onClose} />;
+  if (props.id === "viders") return <VidersApp onClose={props.onClose} />;
+  if (props.id === "family") return <FamilyApp state={props.familyState} onChange={props.setFamilyState} signOut={props.signOut} onClose={props.onClose} />;
   if (props.id === "calendar") return <CalendarApp onClose={props.onClose} />;
   if (props.id === "photos") return <PhotosApp onClose={props.onClose} />;
   if (props.id === "camera") return <CameraApp onClose={props.onClose} />;
   if (props.id === "clock") return <ClockApp onClose={props.onClose} />;
   if (props.id === "maps") return <MapsApp onClose={props.onClose} />;
   if (props.id === "files") return <FilesApp onClose={props.onClose} />;
-  if (props.id === "settings") return <SettingsApp wallpaper={props.wallpaper} chooseWallpaper={props.chooseWallpaper} device={props.device} onClose={props.onClose} />;
+  if (props.id === "settings") return <InteractiveSettings wallpaper={props.wallpaper} chooseWallpaper={props.chooseWallpaper} device={props.device} onClose={props.onClose} />;
   if (props.id === "calculator") return <Calculator onClose={props.onClose} />;
   if (props.id === "notes") return <NotesApp onClose={props.onClose} />;
   if (props.id === "weather") return <WeatherApp onClose={props.onClose} />;
@@ -411,7 +507,8 @@ function AppHeader({ title, onClose, trailing }: { title: string; onClose: () =>
 }
 
 function CustomStore(props: AppViewProps) {
-  const featured = props.apps.filter((app) => app.featured);
+  const visibleApps = props.apps.filter((app) => !app.deviceFamily || app.deviceFamily === props.device.family);
+  const featured = visibleApps.filter((app) => app.featured);
   return (
     <div className="app-window store-window">
       <AppHeader title="Custom Store" onClose={props.onClose} trailing={<span className="avatar">CS</span>} />
@@ -430,8 +527,8 @@ function CustomStore(props: AppViewProps) {
         {props.storeTab === "apps" && <>
           <div className="store-heading"><span>CATALOG</span><h2>Find your next app.</h2></div>
           <label className="store-search"><span>⌕</span><input value={props.search} onChange={(event) => props.setSearch(event.target.value)} placeholder="Search apps" aria-label="Search apps" /></label>
-          <div className="app-list catalog-list">{props.apps.map((app) => <StoreRow key={app.id} app={app} installed={props.installed.includes(app.id)} onInstall={props.toggleInstall} onRemove={props.removeApp} />)}</div>
-          {props.apps.length === 0 && <div className="empty-state">No apps found.</div>}
+          <div className="app-list catalog-list">{visibleApps.map((app) => <StoreRow key={app.id} app={app} installed={props.installed.includes(app.id)} onInstall={props.toggleInstall} onRemove={props.removeApp} />)}</div>
+          {visibleApps.length === 0 && <div className="empty-state">No apps found.</div>}
         </>}
 
         {props.storeTab === "developer" && (!props.devUnlocked ? <div className="developer-lock">
@@ -464,6 +561,86 @@ function StoreRow({ app, installed, onInstall, onRemove }: { app: StoreApp; inst
 
 function SettingsApp({ wallpaper, chooseWallpaper, device, onClose }: { wallpaper: string; chooseWallpaper: (choice: string) => void; device: Device; onClose: () => void }) {
   return <div className="app-window settings-window"><AppHeader title="Settings" onClose={onClose} /><div className="settings-scroll"><h2>Settings</h2><div className="profile-card"><span>CS</span><div><strong>Custom Software</strong><small>{device.name}</small></div><b>›</b></div><section><h3>Wallpaper</h3><div className="wallpaper-picker">{WALLPAPERS.map((choice) => <button key={choice} className={`${choice} ${wallpaper === choice ? "selected" : ""}`} type="button" onClick={() => chooseWallpaper(choice)} aria-label={`Choose ${choice}`}><span>✓</span></button>)}</div></section><section className="settings-list"><button type="button"><span>◉</span><div><strong>Display & Brightness</strong><small>Automatic</small></div><b>›</b></button><button type="button"><span>◌</span><div><strong>Sounds & Haptics</strong><small>Default</small></div><b>›</b></button><button type="button"><span>▣</span><div><strong>Privacy & Security</strong><small>Protected</small></div><b>›</b></button><button type="button"><span>ⓘ</span><div><strong>About</strong><small>Custom Software 1.0</small></div><b>›</b></button></section></div></div>;
+}
+
+function InteractiveSettings({ wallpaper, chooseWallpaper, device, onClose }: { wallpaper: string; chooseWallpaper: (choice: string) => void; device: Device; onClose: () => void }) {
+  const [deviceName, setDeviceName] = useState("My Custom Device");
+  const defaultPreferences = { sounds: true, notifications: true, motion: true, largeText: false, privateMode: true, autoUpdates: true };
+  const [preferences, setPreferences] = useState(defaultPreferences);
+  const [wallet, setWallet] = useState({ balance: 100, cellular: false });
+  const [purchaseMessage, setPurchaseMessage] = useState("");
+  const [softwareVersion, setSoftwareVersion] = useState("1.0.4");
+  const [updating, setUpdating] = useState(false);
+  const [updateMessage, setUpdateMessage] = useState("");
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("cs-settings");
+      if (saved) { const data = JSON.parse(saved); setPreferences({ ...defaultPreferences, ...(data.preferences || {}) }); setDeviceName(data.deviceName || deviceName); }
+      const savedWallet = localStorage.getItem("cs-awesome-wallet");
+      if (savedWallet) setWallet(JSON.parse(savedWallet));
+      setSoftwareVersion(localStorage.getItem("cs-software-version") || "1.0.4");
+    } catch { /* keep defaults */ }
+  // Settings are loaded once when the app opens.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const save = (next: typeof preferences, nextName = deviceName) => {
+    setPreferences(next);
+    localStorage.setItem("cs-settings", JSON.stringify({ preferences: next, deviceName: nextName }));
+  };
+  const rename = (name: string) => { setDeviceName(name); localStorage.setItem("cs-settings", JSON.stringify({ preferences, deviceName: name })); };
+  const toggle = (key: keyof typeof preferences) => save({ ...preferences, [key]: !preferences[key] });
+  const activateCellular = () => {
+    if (device.family !== "phone" || wallet.cellular) return;
+    if (wallet.balance < 74.99) { setPurchaseMessage("You need more Awesome Development Coins."); return; }
+    const next = { balance: Math.round((wallet.balance - 74.99) * 100) / 100, cellular: true };
+    setWallet(next); localStorage.setItem("cs-awesome-wallet", JSON.stringify(next));
+    const transactions = JSON.parse(localStorage.getItem("cs-wallet-transactions") || "[]");
+    transactions.unshift({ id: Date.now(), title: "Custom Cellular", amount: -74.99, date: new Date().toLocaleDateString() });
+    localStorage.setItem("cs-wallet-transactions", JSON.stringify(transactions));
+    setPurchaseMessage("Cellular activated on this iPhone.");
+  };
+  const checkForUpdate = async () => {
+    setUpdating(true);
+    setUpdateMessage("Checking for a software update...");
+    try {
+      if ("serviceWorker" in navigator) {
+        const registration = await navigator.serviceWorker.ready;
+        await registration.update();
+      }
+      const nextVersion = "1.1.0";
+      localStorage.setItem("cs-software-version", nextVersion);
+      setSoftwareVersion(nextVersion);
+      setUpdateMessage("Custom Software is up to date.");
+    } catch {
+      setUpdateMessage("Update check could not connect. Try again when you are online.");
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  return <div className="app-window settings-window interactive-settings"><AppHeader title="Settings" onClose={onClose} />
+    <div className="settings-scroll"><h2>Settings</h2>
+      <div className="profile-card"><span>CS</span><div><input value={deviceName} onChange={(event) => rename(event.target.value)} aria-label="Device name" /><small>{device.name} • Custom Software 1.0</small></div><b>✓</b></div>
+      <section><h3>Wallpaper</h3><div className="wallpaper-picker">{WALLPAPERS.map((choice) => <button key={choice} className={`${choice} ${wallpaper === choice ? "selected" : ""}`} type="button" onClick={() => chooseWallpaper(choice)} aria-label={`Choose ${choice}`}><span>✓</span></button>)}</div></section>
+      <section className="cellular-settings"><div className="coin-wallet"><span>AD</span><div><small>AWESOME DEVELOPMENT COINS</small><strong>{wallet.balance.toFixed(2)}</strong></div></div>{device.family === "phone" ? <div className="cellular-plan"><div><span>📶</span><div><strong>Custom Cellular</strong><small>{wallet.cellular ? "Active • Unlimited virtual data" : "Cellular service for this iPhone"}</small></div></div>{wallet.cellular ? <b>ACTIVE</b> : <button type="button" onClick={activateCellular}>Pay 74.99 Coins</button>}</div> : <p className="iphone-only-note">Custom Cellular is available when an iPhone profile is selected.</p>}{purchaseMessage && <small className="purchase-message">{purchaseMessage}</small>}</section>
+      <section className="settings-list toggle-settings">
+        <SettingToggle icon="🔔" title="Notifications" detail="App alerts and banners" enabled={preferences.notifications} onToggle={() => toggle("notifications")} />
+        <SettingToggle icon="🔊" title="Sounds & Haptics" detail="Interface feedback" enabled={preferences.sounds} onToggle={() => toggle("sounds")} />
+        <SettingToggle icon="✨" title="Motion Effects" detail="Animations and transitions" enabled={preferences.motion} onToggle={() => toggle("motion")} />
+        <SettingToggle icon="Aa" title="Larger Text" detail="Improve readability" enabled={preferences.largeText} onToggle={() => toggle("largeText")} />
+        <SettingToggle icon="🔒" title="Private Mode" detail="Keep data on this device" enabled={preferences.privateMode} onToggle={() => toggle("privateMode")} />
+        <SettingToggle icon="↻" title="Automatic Updates" detail="Keep Custom Software current" enabled={preferences.autoUpdates} onToggle={() => toggle("autoUpdates")} />
+      </section>
+      <section className="software-update"><div><span>CS</span><div><small>SOFTWARE UPDATE</small><strong>Custom Software {softwareVersion}</strong><p>Security, app, and device-profile improvements.</p></div></div><button type="button" disabled={updating} onClick={checkForUpdate}>{updating ? "Checking..." : "Check & Install Update"}</button>{updateMessage && <small className="update-message">{updateMessage}</small>}</section>
+      <section className="settings-about"><h3>About</h3><p><span>Software Version</span><strong>{softwareVersion}</strong></p><p><span>Device Profile</span><strong>{device.name}</strong></p><p><span>Storage</span><strong>On-device</strong></p></section>
+    </div>
+  </div>;
+}
+
+function SettingToggle({ icon, title, detail, enabled, onToggle }: { icon: string; title: string; detail: string; enabled: boolean; onToggle: () => void }) {
+  return <button type="button" onClick={onToggle}><span>{icon}</span><div><strong>{title}</strong><small>{detail}</small></div><i className={`setting-switch ${enabled ? "on" : ""}`}><b /></i></button>;
 }
 
 function Calculator({ onClose }: { onClose: () => void }) {
