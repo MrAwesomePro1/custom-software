@@ -53,7 +53,9 @@ export function CalendarApp({ onClose }: CloseProps) {
   </div>;
 }
 
-const DEFAULT_PHOTOS = [
+type PhotoEntry = { id: number; background: string; created: string; src?: string };
+
+const DEFAULT_PHOTOS: PhotoEntry[] = [
   { id: 1, background: "linear-gradient(135deg,#ff9d62,#ff3f87 55%,#6d4cff)", created: "Sunset" },
   { id: 2, background: "radial-gradient(circle at 30% 25%,#d8fffa,#4bd8dc 35%,#1768bc)", created: "Ocean" },
   { id: 3, background: "radial-gradient(circle at 60% 30%,#fff9ba,#75c659 28%,#145834)", created: "Garden" },
@@ -65,23 +67,51 @@ export function PhotosApp({ onClose }: CloseProps) {
   const [selected, setSelected] = useState<number | null>(null);
   const current = photos.find((photo) => photo.id === selected);
   return <div className="app-window working-window photos-app"><AppBar title="Photos" onClose={onClose} action={<span className="app-text-action">{photos.length} items</span>} />
-    {current ? <div className="photo-viewer"><div style={{ background: current.background }}><span>{current.created}</span></div><footer><button type="button" onClick={() => setSelected(null)}>All Photos</button><button type="button" onClick={() => { setPhotos(photos.filter((photo) => photo.id !== current.id)); setSelected(null); }}>Delete</button></footer></div> : <div className="photo-grid">{photos.map((photo) => <button key={photo.id} type="button" style={{ background: photo.background }} onClick={() => setSelected(photo.id)} aria-label={`Open ${photo.created}`}><span>{photo.created}</span></button>)}</div>}
+    {current ? <div className="photo-viewer"><div style={{ background: current.src ? `center / cover url(${current.src})` : current.background }}><span>{current.created}</span></div><footer><button type="button" onClick={() => setSelected(null)}>All Photos</button><button type="button" onClick={() => { setPhotos(photos.filter((photo) => photo.id !== current.id)); setSelected(null); }}>Delete</button></footer></div> : <div className="photo-grid">{photos.map((photo) => <button key={photo.id} type="button" style={{ background: photo.src ? `center / cover url(${photo.src})` : photo.background }} onClick={() => setSelected(photo.id)} aria-label={`Open ${photo.created}`}><span>{photo.created}</span></button>)}</div>}
   </div>;
 }
 
 export function CameraApp({ onClose }: CloseProps) {
-  const [filter, setFilter] = useState(0);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const [flash, setFlash] = useState(false);
   const [captured, setCaptured] = useState(false);
-  const filters = [
-    "radial-gradient(circle at 70% 25%,#fff3b0,#ef895c 22%,transparent 40%),linear-gradient(145deg,#2c3f68,#8a4f76 60%,#ffaf78)",
-    "radial-gradient(circle at 30% 30%,#d6fff7,#4dc8ce 33%,transparent 50%),linear-gradient(145deg,#0d5571,#166caf,#54d4c0)",
-    "linear-gradient(145deg,#111,#555 45%,#eee)",
-  ];
-  const capture = () => { const existing = JSON.parse(localStorage.getItem("cs-camera-roll") || JSON.stringify(DEFAULT_PHOTOS)); existing.unshift({ id: Date.now(), background: filters[filter], created: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) }); localStorage.setItem("cs-camera-roll", JSON.stringify(existing)); setCaptured(true); window.setTimeout(() => setCaptured(false), 350); };
+  const [facingMode, setFacingMode] = useState<"user" | "environment">("environment");
+  const [cameraReady, setCameraReady] = useState(false);
+  const [cameraError, setCameraError] = useState("");
+  const stopCamera = () => { streamRef.current?.getTracks().forEach((track) => track.stop()); streamRef.current = null; };
+  const startCamera = async (facing: "user" | "environment") => {
+    stopCamera(); setCameraReady(false); setCameraError("");
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) throw new Error("unsupported");
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+      streamRef.current = stream;
+      if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play(); }
+      setCameraReady(true);
+    } catch { setCameraError("Camera permission is needed. Allow camera access, then tap Try Again."); }
+  };
+  useEffect(() => { startCamera(facingMode); return stopCamera; }, [facingMode]);
+  const switchCamera = () => setFacingMode((current) => current === "environment" ? "user" : "environment");
+  const capture = () => {
+    const video = videoRef.current; const canvas = canvasRef.current;
+    if (!video || !canvas || !cameraReady || !video.videoWidth) return;
+    const scale = Math.min(1, 960 / video.videoWidth);
+    canvas.width = Math.round(video.videoWidth * scale); canvas.height = Math.round(video.videoHeight * scale);
+    const context = canvas.getContext("2d"); if (!context) return;
+    if (facingMode === "user") { context.translate(canvas.width, 0); context.scale(-1, 1); }
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const src = canvas.toDataURL("image/jpeg", .82);
+    const existing = JSON.parse(localStorage.getItem("cs-camera-roll") || JSON.stringify(DEFAULT_PHOTOS)) as PhotoEntry[];
+    existing.unshift({ id: Date.now(), background: "#111", src, created: new Date().toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) });
+    try { localStorage.setItem("cs-camera-roll", JSON.stringify(existing.slice(0, 40))); }
+    catch { setCameraError("Photo storage is full. Delete older photos and try again."); return; }
+    setCaptured(true); window.setTimeout(() => setCaptured(false), 350);
+  };
   return <div className={`app-window working-window camera-app ${captured ? "captured" : ""}`}><AppBar title="Camera" onClose={onClose} action={<button className="app-text-action" type="button" onClick={() => setFlash(!flash)}>Flash {flash ? "On" : "Off"}</button>} />
-    <div className="camera-viewfinder" style={{ background: filters[filter] }}><div className="focus-box" /><span>LIVE</span></div>
-    <div className="camera-controls"><button type="button" onClick={() => setFilter((filter + filters.length - 1) % filters.length)}>Filters</button><button className="shutter" type="button" onClick={capture} aria-label="Take photo"><span /></button><button type="button" onClick={() => setFilter((filter + 1) % filters.length)}>Switch</button></div>
+    <div className="camera-viewfinder"><video ref={videoRef} autoPlay playsInline muted className={facingMode === "user" ? "mirror" : ""} />{cameraReady && <><div className="focus-box" /><span>LIVE</span></>}{cameraError && <div className="camera-error"><strong>Camera is off</strong><p>{cameraError}</p><button type="button" onClick={() => startCamera(facingMode)}>Try Again</button></div>}</div>
+    <canvas ref={canvasRef} hidden />
+    <div className="camera-controls"><span>{facingMode === "user" ? "Front Camera" : "Back Camera"}</span><button className="shutter" type="button" onClick={capture} disabled={!cameraReady} aria-label="Take photo"><span /></button><button type="button" onClick={switchCamera}>Switch Camera</button></div>
   </div>;
 }
 
@@ -181,7 +211,8 @@ export function CustomWorkspaceApp({ app, onClose }: { app: AppInfo; onClose: ()
 }
 
 type ContactEntry = { id: number; name: string; phone: string; email: string; color: string };
-type ChatEntry = { id: number; name: string; members: number[]; group: boolean; messages: Array<{ id: number; mine: boolean; text: string }> };
+type ChatMessage = { id: number; mine: boolean; text: string; sender?: string; time?: string; status?: "Sending" | "Delivered" };
+type ChatEntry = { id: number; name: string; members: number[]; group: boolean; messages: ChatMessage[]; unread?: number };
 
 const DEFAULT_CONTACTS: ContactEntry[] = [
   { id: 1, name: "Alex", phone: "555-0101", email: "alex@example.com", color: "#5b7cff" },
@@ -190,37 +221,90 @@ const DEFAULT_CONTACTS: ContactEntry[] = [
 ];
 
 const DEFAULT_CHATS: ChatEntry[] = [
-  { id: 1, name: "Alex", members: [1], group: false, messages: [{ id: 1, mine: false, text: "Hey! Custom Software is looking great." }] },
-  { id: 2, name: "Project Team", members: [1, 2, 3], group: true, messages: [{ id: 2, mine: false, text: "Welcome to the group chat!" }] },
+  { id: 1, name: "Alex", members: [1], group: false, messages: [{ id: 1, mine: false, sender: "Alex", text: "Hey! Custom Software is looking great.", time: "Now" }] },
+  { id: 2, name: "Project Team", members: [1, 2, 3], group: true, messages: [{ id: 2, mine: false, sender: "Jordan", text: "Welcome to the group chat!", time: "Now" }] },
 ];
+
+function makeMessageReply(text: string, chat: ChatEntry, contacts: ContactEntry[]) {
+  const lower = text.toLowerCase();
+  if (lower.includes("hello") || lower.includes("hi")) return "Hey! I got your message.";
+  if (lower.includes("how are")) return "I am doing great. Thanks for asking!";
+  if (lower.includes("custom software")) return "Custom Software is awesome!";
+  if (lower.includes("?")) return "Good question! Let me think about that.";
+  if (lower.includes("thank")) return "You are welcome!";
+  const replies = ["Sounds good!", "I got it.", "Awesome!", "Okay, talk soon.", "That works for me."];
+  const nameScore = chat.name.split("").reduce((total, letter) => total + letter.charCodeAt(0), 0);
+  return replies[(text.length + nameScore + contacts.length) % replies.length];
+}
 
 export function MessagesHubApp({ onClose }: CloseProps) {
   const [contacts] = useStoredState<ContactEntry[]>("cs-contacts", DEFAULT_CONTACTS);
   const [chats, setChats] = useStoredState<ChatEntry[]>("cs-chats", DEFAULT_CHATS);
   const [activeId, setActiveId] = useState(1);
   const [draft, setDraft] = useState("");
-  const [makingGroup, setMakingGroup] = useState(false);
+  const [builder, setBuilder] = useState<"chat" | "group" | null>(null);
   const [groupName, setGroupName] = useState("");
   const [members, setMembers] = useState<number[]>([]);
+  const [typingId, setTypingId] = useState<number | null>(null);
+  const channelRef = useRef<BroadcastChannel | null>(null);
+  const activeIdRef = useRef(activeId);
   const active = chats.find((chat) => chat.id === activeId);
+
+  useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
+  useEffect(() => {
+    if (!("BroadcastChannel" in window)) return;
+    const channel = new BroadcastChannel("custom-software-messages");
+    channelRef.current = channel;
+    channel.onmessage = (event) => { if (Array.isArray(event.data?.chats)) setChats(event.data.chats); };
+    return () => { channel.close(); channelRef.current = null; };
+  }, [setChats]);
+
+  const updateChats = (change: (current: ChatEntry[]) => ChatEntry[]) => {
+    setChats((current) => {
+      const next = change(current);
+      channelRef.current?.postMessage({ chats: next });
+      return next;
+    });
+  };
+
+  const openChat = (id: number) => {
+    setActiveId(id); setBuilder(null);
+    updateChats((current) => current.map((chat) => chat.id === id ? { ...chat, unread: 0 } : chat));
+  };
 
   const send = (event: FormEvent) => {
     event.preventDefault();
     if (!active || !draft.trim()) return;
-    setChats(chats.map((chat) => chat.id === active.id ? { ...chat, messages: [...chat.messages, { id: Date.now(), mine: true, text: draft.trim() }] } : chat));
+    const text = draft.trim(); const chatId = active.id; const outgoingId = Date.now();
+    const outgoing: ChatMessage = { id: outgoingId, mine: true, text, time: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }), status: "Sending" };
+    updateChats((current) => current.map((chat) => chat.id === chatId ? { ...chat, messages: [...chat.messages, outgoing] } : chat));
     setDraft("");
+    window.setTimeout(() => updateChats((current) => current.map((chat) => chat.id === chatId ? { ...chat, messages: chat.messages.map((message) => message.id === outgoingId ? { ...message, status: "Delivered" } : message) } : chat)), 350);
+    setTypingId(chatId);
+    window.setTimeout(() => {
+      const sender = active.group ? contacts.find((contact) => active.members.includes(contact.id))?.name || "Group" : active.name;
+      const reply: ChatMessage = { id: Date.now() + 1, mine: false, sender, text: makeMessageReply(text, active, contacts), time: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) };
+      updateChats((current) => current.map((chat) => chat.id === chatId ? { ...chat, messages: [...chat.messages, reply], unread: activeIdRef.current === chatId ? 0 : (chat.unread || 0) + 1 } : chat));
+      setTypingId(null);
+    }, 1100);
   };
   const createGroup = (event: FormEvent) => {
     event.preventDefault();
     if (!groupName.trim() || members.length < 1) return;
     const chat: ChatEntry = { id: Date.now(), name: groupName.trim(), members, group: true, messages: [{ id: Date.now() + 1, mine: false, text: `Group created with ${members.length} contact${members.length === 1 ? "" : "s"}.` }] };
-    setChats([...chats, chat]); setActiveId(chat.id); setGroupName(""); setMembers([]); setMakingGroup(false);
+    updateChats((current) => [...current, chat]); setActiveId(chat.id); setGroupName(""); setMembers([]); setBuilder(null);
+  };
+  const startConversation = (contact: ContactEntry) => {
+    const existing = chats.find((chat) => !chat.group && chat.members.length === 1 && chat.members[0] === contact.id);
+    if (existing) { openChat(existing.id); return; }
+    const chat: ChatEntry = { id: Date.now(), name: contact.name, members: [contact.id], group: false, messages: [{ id: Date.now() + 1, mine: false, sender: contact.name, text: `You can now message ${contact.name}.`, time: "Now" }], unread: 0 };
+    updateChats((current) => [...current, chat]); setActiveId(chat.id); setBuilder(null);
   };
 
-  return <div className="app-window working-window messages-hub"><AppBar title="Messages" onClose={onClose} action={<button className="app-text-action" type="button" onClick={() => setMakingGroup(true)}>New Group</button>} />
+  return <div className="app-window working-window messages-hub"><AppBar title="Messages" onClose={onClose} action={<div className="message-actions"><button type="button" onClick={() => setBuilder("chat")}>New Chat</button><button type="button" onClick={() => setBuilder("group")}>New Group</button></div>} />
     <div className="messages-hub-layout">
-      <aside><h3>Chats</h3>{chats.map((chat) => <button className={activeId === chat.id ? "selected" : ""} type="button" key={chat.id} onClick={() => { setActiveId(chat.id); setMakingGroup(false); }}><span style={{ background: chat.group ? "#725cff" : contacts.find((contact) => contact.id === chat.members[0])?.color || "#4a8cff" }}>{chat.group ? "👥" : chat.name.slice(0, 1)}</span><div><strong>{chat.name}</strong><small>{chat.messages[chat.messages.length - 1]?.text || "New conversation"}</small></div></button>)}</aside>
-      <section>{makingGroup ? <form className="group-builder" onSubmit={createGroup}><h2>New Group Chat</h2><label>Group name<input value={groupName} onChange={(event) => setGroupName(event.target.value)} placeholder="Friends, Team, Family..." /></label><h3>Add contacts</h3><div>{contacts.map((contact) => <label key={contact.id}><input type="checkbox" checked={members.includes(contact.id)} onChange={() => setMembers(members.includes(contact.id) ? members.filter((id) => id !== contact.id) : [...members, contact.id])} /><span style={{ background: contact.color }}>{contact.name.slice(0, 1)}</span>{contact.name}</label>)}</div><button type="submit" disabled={!groupName.trim() || !members.length}>Create Group</button></form> : active ? <><header><span>{active.group ? "👥" : active.name.slice(0, 1)}</span><div><strong>{active.name}</strong><small>{active.group ? `${active.members.length} members` : "Contact"}</small></div></header><div className="hub-thread">{active.messages.map((message) => <div className={`message-bubble ${message.mine ? "mine" : "theirs"}`} key={message.id}>{message.text}</div>)}</div><form className="message-compose hub-compose" onSubmit={send}><input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={`Message ${active.name}`} /><button type="submit">↑</button></form></> : <div className="working-empty">Choose a conversation.</div>}</section>
+      <aside><h3>Chats</h3>{chats.map((chat) => <button className={activeId === chat.id && !builder ? "selected" : ""} type="button" key={chat.id} onClick={() => openChat(chat.id)}><span style={{ background: chat.group ? "#725cff" : contacts.find((contact) => contact.id === chat.members[0])?.color || "#4a8cff" }}>{chat.group ? "👥" : chat.name.slice(0, 1)}</span><div><strong>{chat.name}{Boolean(chat.unread) && <b className="unread-count">{chat.unread}</b>}</strong><small>{typingId === chat.id ? "typing..." : chat.messages[chat.messages.length - 1]?.text || "New conversation"}</small></div></button>)}</aside>
+      <section>{builder === "chat" ? <div className="new-chat-builder"><h2>New Message</h2><p>Choose a contact.</p>{contacts.map((contact) => <button type="button" key={contact.id} onClick={() => startConversation(contact)}><span style={{ background: contact.color }}>{contact.name.slice(0, 1)}</span><div><strong>{contact.name}</strong><small>{contact.phone}</small></div><b>›</b></button>)}</div> : builder === "group" ? <form className="group-builder" onSubmit={createGroup}><h2>New Group Chat</h2><label>Group name<input value={groupName} onChange={(event) => setGroupName(event.target.value)} placeholder="Friends, Team, Family..." /></label><h3>Add contacts</h3><div>{contacts.map((contact) => <label key={contact.id}><input type="checkbox" checked={members.includes(contact.id)} onChange={() => setMembers(members.includes(contact.id) ? members.filter((id) => id !== contact.id) : [...members, contact.id])} /><span style={{ background: contact.color }}>{contact.name.slice(0, 1)}</span>{contact.name}</label>)}</div><button type="submit" disabled={!groupName.trim() || !members.length}>Create Group</button></form> : active ? <><header><span>{active.group ? "👥" : active.name.slice(0, 1)}</span><div><strong>{active.name}</strong><small>{typingId === active.id ? "typing..." : active.group ? `${active.members.length} members` : "Available"}</small></div></header><div className="hub-thread">{active.messages.map((message) => <div className={`message-line ${message.mine ? "mine" : "theirs"}`} key={message.id}>{active.group && !message.mine && <small>{message.sender || "Group member"}</small>}<div className={`message-bubble ${message.mine ? "mine" : "theirs"}`}>{message.text}</div><span>{message.time || ""}{message.mine && message.status ? ` • ${message.status}` : ""}</span></div>)}{typingId === active.id && <div className="typing-bubble"><i /><i /><i /></div>}</div><form className="message-compose hub-compose" onSubmit={send}><input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={`Message ${active.name}`} aria-label={`Message ${active.name}`} /><button type="submit" disabled={!draft.trim()} aria-label="Send message">↑</button></form></> : <div className="working-empty">Choose a conversation.</div>}</section>
     </div>
   </div>;
 }

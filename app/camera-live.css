@@ -1,0 +1,9 @@
+.camera-viewfinder{background:#111!important;background-image:none!important}
+.camera-viewfinder video{width:100%;height:100%;display:block;object-fit:cover}
+.camera-viewfinder video.mirror{transform:scaleX(-1)}
+.shutter:disabled{opacity:.35;cursor:not-allowed}
+.camera-controls>span{color:#c4c8d0;font-size:clamp(6px,.85vw,9px);text-align:center}
+.camera-error{position:absolute;inset:0;padding:10%;display:grid;place-content:center;justify-items:center;text-align:center;background:radial-gradient(circle at 50% 35%,#2d3442,#111318 65%)}
+.camera-error strong{font-size:clamp(14px,2.5vw,28px)}
+.camera-error p{max-width:320px;color:#adb3bd;font-size:clamp(7px,1vw,11px);line-height:1.5}
+.camera-error button{padding:8px 13px;border:0;border-radius:9px;color:white;background:#2878ff;font-weight:800;cursor:pointer}

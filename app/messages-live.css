@@ -1,0 +1,20 @@
+.message-actions{display:flex;align-items:center;gap:5px}
+.message-actions button{padding:5px 7px;border:0;border-radius:8px;color:#2878ff;background:#edf3ff;font-size:clamp(6px,.8vw,9px);font-weight:800;cursor:pointer}
+.messages-hub-layout>aside>button strong{display:flex;align-items:center;justify-content:space-between;gap:5px}
+.unread-count{min-width:16px;height:16px;padding:0 4px;display:grid;place-items:center;border-radius:999px;color:white;background:#2878ff;font-size:7px}
+.message-line{margin:2px 0;display:flex;flex-direction:column;align-items:flex-start}
+.message-line.mine{align-items:flex-end}
+.message-line>small{margin:0 7px 2px;color:#737a86;font-size:clamp(5px,.72vw,8px);font-weight:750}
+.message-line>span{margin:2px 7px;color:#969ca6;font-size:clamp(5px,.65vw,7px)}
+.message-line .message-bubble{max-width:78%}
+.typing-bubble{width:48px;padding:9px 11px;display:flex;gap:3px;border-radius:16px;background:#dfe3e9}
+.typing-bubble i{width:5px;aspect-ratio:1;border-radius:50%;background:#858c97;animation:typing-dot .9s infinite ease-in-out}
+.typing-bubble i:nth-child(2){animation-delay:.15s}.typing-bubble i:nth-child(3){animation-delay:.3s}
+@keyframes typing-dot{0%,60%,100%{transform:translateY(0);opacity:.45}30%{transform:translateY(-3px);opacity:1}}
+.hub-compose button:disabled{opacity:.4;cursor:not-allowed}
+.new-chat-builder{height:100%;padding:7%;overflow-y:auto}
+.new-chat-builder h2{margin:0;font-size:clamp(18px,3.4vw,38px)}.new-chat-builder>p{margin:1% 0 5%;color:#7a818d;font-size:clamp(7px,1vw,11px)}
+.new-chat-builder>button{width:100%;padding:3%;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:3%;border:0;border-bottom:1px solid #e2e5ea;background:white;text-align:left;cursor:pointer}
+.new-chat-builder>button:first-of-type{border-radius:12px 12px 0 0}.new-chat-builder>button:last-of-type{border-radius:0 0 12px 12px}
+.new-chat-builder>button>span{width:clamp(30px,5vw,50px);aspect-ratio:1;display:grid;place-items:center;border-radius:50%;color:white;font-weight:850}.new-chat-builder>button div{display:grid}.new-chat-builder strong{font-size:clamp(8px,1.15vw,13px)}.new-chat-builder small{color:#858c97;font-size:clamp(6px,.8vw,9px)}.new-chat-builder b{color:#8b929d}
+@media(max-width:700px){.message-actions button{padding:4px}.message-line .message-bubble{max-width:88%}.new-chat-builder{padding:5%}}
