@@ -220,6 +220,36 @@ const DEFAULT_CONTACTS: ContactEntry[] = [
   { id: 3, name: "Taylor", phone: "555-0188", email: "taylor@example.com", color: "#20aa7a" },
 ];
 
+export function FaceTimeApp({ onClose }: CloseProps) {
+  const [contacts] = useStoredState<ContactEntry[]>("cs-contacts", DEFAULT_CONTACTS);
+  const [history, setHistory] = useStoredState<Array<{ id: number; name: string; date: string; duration: number }>>("cs-facetime-history", []);
+  const [selectedId, setSelectedId] = useState(contacts[0]?.id || 0);
+  const [inCall, setInCall] = useState(false); const [connecting, setConnecting] = useState(false); const [muted, setMuted] = useState(false); const [facing, setFacing] = useState<"user" | "environment">("user"); const [seconds, setSeconds] = useState(0); const [error, setError] = useState("");
+  const videoRef = useRef<HTMLVideoElement>(null); const streamRef = useRef<MediaStream | null>(null);
+  const contact = contacts.find((item) => item.id === selectedId) || contacts[0];
+  const stopStream = () => { streamRef.current?.getTracks().forEach((track) => track.stop()); streamRef.current = null; };
+  const openCamera = async (mode: "user" | "environment") => {
+    stopStream();
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: mode } }, audio: true });
+    streamRef.current = stream; if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play(); }
+  };
+  const startCall = async () => {
+    if (!contact) return; setError(""); setConnecting(true); setSeconds(0);
+    try { await openCamera(facing); setInCall(true); window.setTimeout(() => setConnecting(false), 700); }
+    catch { setConnecting(false); setError("Allow camera and microphone access to start a video call."); }
+  };
+  const endCall = () => { if (contact && inCall) setHistory([{ id: Date.now(), name: contact.name, date: new Date().toLocaleString(), duration: seconds }, ...history].slice(0, 12)); stopStream(); setInCall(false); setConnecting(false); setMuted(false); setSeconds(0); };
+  const flipCamera = async () => { const next = facing === "user" ? "environment" : "user"; setFacing(next); if (inCall) { try { await openCamera(next); } catch { setError("Could not switch cameras."); } } };
+  const toggleMute = () => { const next = !muted; streamRef.current?.getAudioTracks().forEach((track) => { track.enabled = !next; }); setMuted(next); };
+  const launchNative = () => { if (!contact) return; window.location.href = `facetime:${contact.email && contact.email !== "No email" ? contact.email : contact.phone}`; };
+  useEffect(() => { if (!inCall || connecting) return; const timer = window.setInterval(() => setSeconds((value) => value + 1), 1000); return () => window.clearInterval(timer); }, [inCall, connecting]);
+  useEffect(() => stopStream, []);
+  const duration = `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+  return <div className="app-window working-window facetime-app"><AppBar title="FaceTime" onClose={() => { stopStream(); onClose(); }} action={<span className="facetime-status">{inCall ? duration : "Video"}</span>} />
+    {inCall || connecting ? <div className="facetime-call"><div className="remote-person" style={{ background: contact?.color }}><span>{contact?.name.slice(0, 1)}</span><strong>{contact?.name}</strong><small>{connecting ? "Connecting..." : duration}</small></div><video ref={videoRef} autoPlay muted playsInline className={facing === "user" ? "mirror" : ""} /><div className="facetime-call-controls"><button className={muted ? "off" : ""} type="button" onClick={toggleMute}><span>{muted ? "×" : "M"}</span>Mute</button><button type="button" onClick={flipCamera}><span>↻</span>Flip</button><button className="end-call" type="button" onClick={endCall}><span>×</span>End</button></div></div> : <div className="facetime-home"><div className="facetime-hero"><span>🎥</span><div><small>FACETIME</small><h2>Start a video call.</h2><p>Choose a contact, then use the real camera and microphone.</p></div></div><section><h3>Contacts</h3><div className="facetime-contacts">{contacts.map((item) => <button className={item.id === selectedId ? "selected" : ""} type="button" key={item.id} onClick={() => { setSelectedId(item.id); setError(""); }}><span style={{ background: item.color }}>{item.name.slice(0, 1)}</span><strong>{item.name}</strong></button>)}</div><div className="facetime-actions"><button type="button" onClick={startCall}>Start Custom Video Call</button><button type="button" onClick={launchNative}>Open Real FaceTime</button></div>{error && <p className="facetime-error">{error}</p>}</section><section><h3>Recent Calls</h3><div className="facetime-history">{history.length ? history.map((call) => <article key={call.id}><span>{call.name.slice(0, 1)}</span><div><strong>{call.name}</strong><small>{call.date}</small></div><b>{Math.floor(call.duration / 60)}:{String(call.duration % 60).padStart(2, "0")}</b></article>) : <p>No recent calls.</p>}</div></section></div>}
+  </div>;
+}
+
 const DEFAULT_CHATS: ChatEntry[] = [
   { id: 1, name: "Alex", members: [1], group: false, messages: [{ id: 1, mine: false, sender: "Alex", text: "Hey! Custom Software is looking great.", time: "Now" }] },
   { id: 2, name: "Project Team", members: [1, 2, 3], group: true, messages: [{ id: 2, mine: false, sender: "Jordan", text: "Welcome to the group chat!", time: "Now" }] },

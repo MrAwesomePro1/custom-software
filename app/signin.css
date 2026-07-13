@@ -1,0 +1,7 @@
+.chatgpt-signin{width:100%;margin:4px 0 14px;padding:13px;display:block;border-radius:11px;color:white;background:#101216;text-align:center;text-decoration:none;font-size:12px;font-weight:850}
+.online-user-card{width:100%;margin:4px 0 14px;padding:12px;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:11px;border:1px solid #cfe0ff;border-radius:13px;color:#1e2530;background:#edf4ff;text-align:left}
+.online-user-card>span{width:40px;aspect-ratio:1;display:grid;place-items:center;border-radius:50%;color:white;background:linear-gradient(145deg,#18a97b,#087d60);font-weight:900}
+.online-user-card div{display:grid}.online-user-card strong{font-size:11px}.online-user-card small{color:#6f7783;font-size:9px}.online-user-card b{color:#198461}.online-continue{border:1px solid #cfe0ff;cursor:pointer}
+.signin-divider{margin:13px 0;display:flex;align-items:center;gap:10px;color:#8a9099;font-size:9px;text-transform:uppercase}.signin-divider:before,.signin-divider:after{content:"";height:1px;flex:1;background:#dde1e8}
+.account-login .account-panel form{gap:11px}
+@media(max-width:700px){.online-user-card{padding:10px}.chatgpt-signin{padding:11px}}

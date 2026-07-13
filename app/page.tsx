@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
-  CalendarApp, CameraApp, ClockApp, ContactsApp, CustomWorkspaceApp, FilesApp, FitnessApp, FocusApp,
+  CalendarApp, CameraApp, ClockApp, ContactsApp, CustomWorkspaceApp, FaceTimeApp, FilesApp, FitnessApp, FocusApp,
   MapsApp, MessagesHubApp, MusicApp, NotesApp, PhotosApp, RecipeApp, SketchpadApp,
   HealthApp, StargazerApp, TowerGameApp, VidersApp, WalletApp, WeatherApp,
 } from "./functional-apps";
@@ -33,9 +33,10 @@ type StoreApp = {
   deviceFamily?: "phone";
 };
 
-type FamilyAccount = { id: string; name: string; age: number; pin: string; role: "adult" | "child"; familyIds: string[] };
+type FamilyAccount = { id: string; name: string; age: number; pin: string; email?: string; role: "adult" | "child"; familyIds: string[] };
 type FamilyGroup = { id: string; name: string; memberIds: string[]; guardianIds: string[] };
 type FamilyState = { accounts: FamilyAccount[]; families: FamilyGroup[]; currentAccountId: string; activeFamilyId: string };
+type OnlineUser = { displayName: string; email: string; fullName: string | null };
 
 const DEVICES: Device[] = [
   { id: "iphone-14", name: "iPhone 14", family: "phone", width: 390, height: 844 },
@@ -71,6 +72,7 @@ const BUILT_INS = [
   { id: "calendar", name: "Calendar", icon: "📅", color: "#ffffff" },
   { id: "photos", name: "Photos", icon: "🌸", color: "#ffffff" },
   { id: "camera", name: "Camera", icon: "📷", color: "#d9dce1" },
+  { id: "facetime", name: "FaceTime", icon: "🎥", color: "#2fcf62" },
   { id: "weather", name: "Weather", icon: "🌤️", color: "#42a5f5" },
   { id: "clock", name: "Clock", icon: "🕘", color: "#101114" },
   { id: "maps", name: "Maps", icon: "🗺️", color: "#eaf7e9" },
@@ -127,6 +129,7 @@ export default function Home() {
   const [familyReady, setFamilyReady] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
   const [country, setCountry] = useState("");
+  const [onlineUser, setOnlineUser] = useState<OnlineUser | null>(null);
   const [now, setNow] = useState(new Date());
   const [newApp, setNewApp] = useState({ name: "", icon: "🚀", category: "Utilities", description: "", color: "#6c5ce7" });
 
@@ -182,6 +185,10 @@ export default function Home() {
       setSignedIn(sessionStorage.getItem("cs-account-session") === "active");
     } catch { /* show account setup */ }
     setFamilyReady(true);
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/me", { cache: "no-store" }).then((response) => response.json()).then((data) => setOnlineUser(data.user || null)).catch(() => setOnlineUser(null));
   }, []);
 
   const updateFamilyState = (next: FamilyState) => {
@@ -282,8 +289,8 @@ export default function Home() {
 
   if (!familyReady) return <div className="account-loading"><span className="brand-mark">CS</span><p>Starting Custom Software...</p></div>;
   if (!country) return <CountrySetup onComplete={(choice) => { localStorage.setItem("cs-country", choice); setCountry(choice); }} />;
-  if (!familyState) return <AccountSetup onComplete={(next) => { updateFamilyState(next); sessionStorage.setItem("cs-account-session", "active"); setSignedIn(true); }} />;
-  if (!signedIn) return <AccountLogin state={familyState} onSuccess={(next) => { updateFamilyState(next); sessionStorage.setItem("cs-account-session", "active"); setSignedIn(true); }} />;
+  if (!familyState) return <AccountSetup onlineUser={onlineUser} onComplete={(next) => { updateFamilyState(next); sessionStorage.setItem("cs-account-session", "active"); setSignedIn(true); }} />;
+  if (!signedIn) return <AccountLogin state={familyState} onlineUser={onlineUser} onSuccess={(next) => { updateFamilyState(next); sessionStorage.setItem("cs-account-session", "active"); setSignedIn(true); }} />;
 
   return (
     <main className="studio">
@@ -403,33 +410,36 @@ function CountrySetup({ onComplete }: { onComplete: (country: string) => void })
   return <main className="account-setup country-setup"><div className="account-panel"><span className="brand-mark">CS</span><div className="setup-heading"><small>WELCOME TO</small><h1>Choose your country</h1><p>This sets the local network region for Custom Software. You can choose only United States or KidTopia.</p></div><div className="country-options"><button className={selected === "United States" ? "selected" : ""} type="button" onClick={() => setSelected("United States")}><span>US</span><div><strong>United States</strong><small>United States local networks</small></div><b>{selected === "United States" ? "Selected" : "Choose"}</b></button><button className={selected === "KidTopia" ? "selected" : ""} type="button" onClick={() => setSelected("KidTopia")}><span>KT</span><div><strong>KidTopia</strong><small>KidTopia local networks</small></div><b>{selected === "KidTopia" ? "Selected" : "Choose"}</b></button></div><button className="setup-submit country-continue" type="button" disabled={!selected} onClick={() => onComplete(selected)}>Continue</button></div></main>;
 }
 
-function AccountSetup({ onComplete }: { onComplete: (state: FamilyState) => void }) {
+function AccountSetup({ onComplete, onlineUser }: { onComplete: (state: FamilyState) => void; onlineUser: OnlineUser | null }) {
   const [name, setName] = useState(""); const [age, setAge] = useState(18); const [pin, setPin] = useState("");
-  const [guardianName, setGuardianName] = useState(""); const [guardianAge, setGuardianAge] = useState(18); const [guardianPin, setGuardianPin] = useState(""); const [error, setError] = useState("");
+  const [email, setEmail] = useState(""); const [guardianName, setGuardianName] = useState(""); const [guardianEmail, setGuardianEmail] = useState(""); const [guardianAge, setGuardianAge] = useState(18); const [guardianPin, setGuardianPin] = useState(""); const [error, setError] = useState("");
+  useEffect(() => { if (onlineUser) { setName((current) => current || onlineUser.fullName || onlineUser.displayName); setEmail((current) => current || onlineUser.email); } }, [onlineUser]);
   const submit = (event: FormEvent) => {
     event.preventDefault(); setError("");
     if (!name.trim() || age < 1 || age > 120 || !/^\d{4}$/.test(pin)) { setError("Enter a name, valid age, and 4-digit PIN."); return; }
     const familyId = `family-${Date.now()}`; const accountId = `account-${Date.now()}`;
     if (age >= 18) {
-      const account: FamilyAccount = { id: accountId, name: name.trim(), age, pin, role: "adult", familyIds: [familyId] };
+      if (!/^\S+@\S+\.\S+$/.test(email)) { setError("Enter a valid email for sign in."); return; }
+      const account: FamilyAccount = { id: accountId, name: name.trim(), age, pin, email: email.trim().toLowerCase(), role: "adult", familyIds: [familyId] };
       onComplete({ accounts: [account], families: [{ id: familyId, name: `${name.trim()} Family`, memberIds: [accountId], guardianIds: [accountId] }], currentAccountId: accountId, activeFamilyId: familyId });
       return;
     }
-    if (!guardianName.trim() || guardianAge < 18 || !/^\d{4}$/.test(guardianPin)) { setError("A guardian age 18+ and guardian PIN are required for a child account."); return; }
+    if (!guardianName.trim() || guardianAge < 18 || !/^\S+@\S+\.\S+$/.test(guardianEmail) || !/^\d{4}$/.test(guardianPin)) { setError("A guardian age 18+, email, and guardian PIN are required for a child account."); return; }
     const guardianId = `guardian-${Date.now()}`;
     const child: FamilyAccount = { id: accountId, name: name.trim(), age, pin, role: "child", familyIds: [familyId] };
-    const guardian: FamilyAccount = { id: guardianId, name: guardianName.trim(), age: guardianAge, pin: guardianPin, role: "adult", familyIds: [familyId] };
+    const guardian: FamilyAccount = { id: guardianId, name: guardianName.trim(), age: guardianAge, pin: guardianPin, email: guardianEmail.trim().toLowerCase(), role: "adult", familyIds: [familyId] };
     onComplete({ accounts: [guardian, child], families: [{ id: familyId, name: `${guardianName.trim()} Family`, memberIds: [guardianId, accountId], guardianIds: [guardianId] }], currentAccountId: accountId, activeFamilyId: familyId });
   };
-  return <main className="account-setup"><div className="account-panel"><span className="brand-mark">CS</span><div className="setup-heading"><small>WELCOME TO</small><h1>Custom Software</h1><p>Create the first account to start the system. Account and age data stay on this device.</p></div><form onSubmit={submit}><div className="setup-grid"><label>Your name<input required value={name} onChange={(event) => setName(event.target.value)} placeholder="Name" /></label><label>Your age<input required type="number" min="1" max="120" value={age} onChange={(event) => setAge(Number(event.target.value))} /></label></div><label>Choose a 4-digit PIN<input required inputMode="numeric" maxLength={4} value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="0000" /></label>{age < 18 && <fieldset><legend>Guardian setup</legend><p>A parent or guardian must create the family for this child account.</p><div className="setup-grid"><label>Guardian name<input required value={guardianName} onChange={(event) => setGuardianName(event.target.value)} /></label><label>Guardian age<input required type="number" min="18" max="120" value={guardianAge} onChange={(event) => setGuardianAge(Number(event.target.value))} /></label></div><label>Guardian 4-digit PIN<input required inputMode="numeric" maxLength={4} value={guardianPin} onChange={(event) => setGuardianPin(event.target.value.replace(/\D/g, "").slice(0, 4))} /></label></fieldset>}{error && <p className="account-error">{error}</p>}<button className="setup-submit" type="submit">Create Account & Start</button></form></div></main>;
+  return <main className="account-setup"><div className="account-panel"><span className="brand-mark">CS</span><div className="setup-heading"><small>WELCOME TO</small><h1>Custom Software</h1><p>Create the first account to start the system. Your local profile stays on this device.</p></div>{onlineUser ? <div className="online-user-card"><span>{onlineUser.displayName.slice(0, 1).toUpperCase()}</span><div><strong>Signed in with ChatGPT</strong><small>{onlineUser.email}</small></div><b>✓</b></div> : <a className="chatgpt-signin" href="/signin-with-chatgpt?return_to=%2F">Sign in with ChatGPT</a>}<form onSubmit={submit}><div className="setup-grid"><label>Your name<input required value={name} onChange={(event) => setName(event.target.value)} placeholder="Name" /></label><label>Your age<input required type="number" min="1" max="120" value={age} onChange={(event) => setAge(Number(event.target.value))} /></label></div>{age >= 18 && <label>Email for sign in<input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@example.com" /></label>}<label>Choose a 4-digit PIN<input required inputMode="numeric" maxLength={4} value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="0000" /></label>{age < 18 && <fieldset><legend>Guardian setup</legend><p>A parent or guardian must create the family for this child account.</p><div className="setup-grid"><label>Guardian name<input required value={guardianName} onChange={(event) => setGuardianName(event.target.value)} /></label><label>Guardian age<input required type="number" min="18" max="120" value={guardianAge} onChange={(event) => setGuardianAge(Number(event.target.value))} /></label></div><label>Guardian email<input required type="email" value={guardianEmail} onChange={(event) => setGuardianEmail(event.target.value)} /></label><label>Guardian 4-digit PIN<input required inputMode="numeric" maxLength={4} value={guardianPin} onChange={(event) => setGuardianPin(event.target.value.replace(/\D/g, "").slice(0, 4))} /></label></fieldset>}{error && <p className="account-error">{error}</p>}<button className="setup-submit" type="submit">Create Account & Start</button></form></div></main>;
 }
 
-function AccountLogin({ state, onSuccess }: { state: FamilyState; onSuccess: (state: FamilyState) => void }) {
+function AccountLogin({ state, onSuccess, onlineUser }: { state: FamilyState; onSuccess: (state: FamilyState) => void; onlineUser: OnlineUser | null }) {
   const family = state.families.find((item) => item.id === state.activeFamilyId) || state.families[0];
   const accounts = state.accounts.filter((account) => family?.memberIds.includes(account.id));
-  const [selected, setSelected] = useState(state.currentAccountId || accounts[0]?.id || ""); const [pin, setPin] = useState(""); const [error, setError] = useState("");
-  const login = (event: FormEvent) => { event.preventDefault(); const account = state.accounts.find((item) => item.id === selected); if (!account || account.pin !== pin) { setError("That PIN is not correct."); return; } onSuccess({ ...state, currentAccountId: account.id }); };
-  return <main className="account-setup account-login"><div className="account-panel"><span className="brand-mark">CS</span><div className="setup-heading"><small>{family?.name || "FAMILY"}</small><h1>Who is using this device?</h1><p>Choose an account and enter its PIN.</p></div><div className="account-choices">{accounts.map((account) => <button className={selected === account.id ? "selected" : ""} type="button" key={account.id} onClick={() => { setSelected(account.id); setPin(""); setError(""); }}><span>{account.name.slice(0, 1)}</span><strong>{account.name}</strong><small>{account.role} • age {account.age}</small></button>)}</div><form onSubmit={login}><label>4-digit PIN<input autoFocus inputMode="numeric" maxLength={4} value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="••••" /></label>{error && <p className="account-error">{error}</p>}<button className="setup-submit" type="submit">Enter Custom Software</button></form></div></main>;
+  const [selected, setSelected] = useState(state.currentAccountId || accounts[0]?.id || ""); const [loginName, setLoginName] = useState(""); const [pin, setPin] = useState(""); const [error, setError] = useState("");
+  const login = (event: FormEvent) => { event.preventDefault(); const typed = loginName.trim().toLowerCase(); const account = state.accounts.find((item) => item.id === selected && (!typed || item.name.toLowerCase() === typed || item.email?.toLowerCase() === typed)) || state.accounts.find((item) => item.name.toLowerCase() === typed || item.email?.toLowerCase() === typed); if (!account || account.pin !== pin) { setError("That account or PIN is not correct."); return; } onSuccess({ ...state, currentAccountId: account.id }); };
+  const continueWithChatGPT = () => { if (!onlineUser) return; const account = accounts.find((item) => item.email?.toLowerCase() === onlineUser.email.toLowerCase()) || accounts.find((item) => item.role === "adult") || accounts[0]; if (!account) { setError("Create a local profile for this account first."); return; } onSuccess({ ...state, currentAccountId: account.id }); };
+  return <main className="account-setup account-login"><div className="account-panel"><span className="brand-mark">CS</span><div className="setup-heading"><small>{family?.name || "FAMILY"}</small><h1>Sign in to Custom Software</h1><p>Use ChatGPT sign in, or choose a local account and enter its PIN.</p></div>{onlineUser ? <button className="online-user-card online-continue" type="button" onClick={continueWithChatGPT}><span>{onlineUser.displayName.slice(0, 1).toUpperCase()}</span><div><strong>Continue as {onlineUser.displayName}</strong><small>{onlineUser.email}</small></div><b>›</b></button> : <a className="chatgpt-signin" href="/signin-with-chatgpt?return_to=%2F">Sign in with ChatGPT</a>}<div className="signin-divider"><span>or use a local account</span></div><div className="account-choices">{accounts.map((account) => <button className={selected === account.id ? "selected" : ""} type="button" key={account.id} onClick={() => { setSelected(account.id); setLoginName(account.email || account.name); setPin(""); setError(""); }}><span>{account.name.slice(0, 1)}</span><strong>{account.name}</strong><small>{account.email || `${account.role} • age ${account.age}`}</small></button>)}</div><form onSubmit={login}><label>Account name or email<input value={loginName} onChange={(event) => setLoginName(event.target.value)} placeholder="Name or email" autoComplete="username" /></label><label>4-digit PIN<input inputMode="numeric" maxLength={4} value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="••••" autoComplete="current-password" /></label>{error && <p className="account-error">{error}</p>}<button className="setup-submit" type="submit">Sign In</button></form></div></main>;
 }
 
 function FamilyApp({ state, onChange, signOut, onClose }: { state: FamilyState; onChange: (state: FamilyState) => void; signOut: () => void; onClose: () => void }) {
@@ -483,6 +493,7 @@ function AppView(props: AppViewProps) {
   if (props.id === "store") return <CustomStore {...props} />;
   if (props.id === "messages") return <MessagesHubApp onClose={props.onClose} />;
   if (props.id === "contacts") return <ContactsApp onClose={props.onClose} />;
+  if (props.id === "facetime") return <FaceTimeApp onClose={props.onClose} />;
   if (props.id === "wallet") return <WalletApp onClose={props.onClose} />;
   if (props.id === "health-plus") return <HealthApp onClose={props.onClose} />;
   if (props.id === "viders") return <VidersApp onClose={props.onClose} />;
