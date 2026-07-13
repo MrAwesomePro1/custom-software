@@ -255,18 +255,6 @@ const DEFAULT_CHATS: ChatEntry[] = [
   { id: 2, name: "Project Team", members: [1, 2, 3], group: true, messages: [{ id: 2, mine: false, sender: "Jordan", text: "Welcome to the group chat!", time: "Now" }] },
 ];
 
-function makeMessageReply(text: string, chat: ChatEntry, contacts: ContactEntry[]) {
-  const lower = text.toLowerCase();
-  if (lower.includes("hello") || lower.includes("hi")) return "Hey! I got your message.";
-  if (lower.includes("how are")) return "I am doing great. Thanks for asking!";
-  if (lower.includes("custom software")) return "Custom Software is awesome!";
-  if (lower.includes("?")) return "Good question! Let me think about that.";
-  if (lower.includes("thank")) return "You are welcome!";
-  const replies = ["Sounds good!", "I got it.", "Awesome!", "Okay, talk soon.", "That works for me."];
-  const nameScore = chat.name.split("").reduce((total, letter) => total + letter.charCodeAt(0), 0);
-  return replies[(text.length + nameScore + contacts.length) % replies.length];
-}
-
 export function MessagesHubApp({ onClose }: CloseProps) {
   const [contacts] = useStoredState<ContactEntry[]>("cs-contacts", DEFAULT_CONTACTS);
   const [chats, setChats] = useStoredState<ChatEntry[]>("cs-chats", DEFAULT_CHATS);
@@ -275,12 +263,9 @@ export function MessagesHubApp({ onClose }: CloseProps) {
   const [builder, setBuilder] = useState<"chat" | "group" | null>(null);
   const [groupName, setGroupName] = useState("");
   const [members, setMembers] = useState<number[]>([]);
-  const [typingId, setTypingId] = useState<number | null>(null);
   const channelRef = useRef<BroadcastChannel | null>(null);
-  const activeIdRef = useRef(activeId);
   const active = chats.find((chat) => chat.id === activeId);
 
-  useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
   useEffect(() => {
     if (!("BroadcastChannel" in window)) return;
     const channel = new BroadcastChannel("custom-software-messages");
@@ -310,13 +295,6 @@ export function MessagesHubApp({ onClose }: CloseProps) {
     updateChats((current) => current.map((chat) => chat.id === chatId ? { ...chat, messages: [...chat.messages, outgoing] } : chat));
     setDraft("");
     window.setTimeout(() => updateChats((current) => current.map((chat) => chat.id === chatId ? { ...chat, messages: chat.messages.map((message) => message.id === outgoingId ? { ...message, status: "Delivered" } : message) } : chat)), 350);
-    setTypingId(chatId);
-    window.setTimeout(() => {
-      const sender = active.group ? contacts.find((contact) => active.members.includes(contact.id))?.name || "Group" : active.name;
-      const reply: ChatMessage = { id: Date.now() + 1, mine: false, sender, text: makeMessageReply(text, active, contacts), time: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) };
-      updateChats((current) => current.map((chat) => chat.id === chatId ? { ...chat, messages: [...chat.messages, reply], unread: activeIdRef.current === chatId ? 0 : (chat.unread || 0) + 1 } : chat));
-      setTypingId(null);
-    }, 1100);
   };
   const createGroup = (event: FormEvent) => {
     event.preventDefault();
@@ -333,8 +311,8 @@ export function MessagesHubApp({ onClose }: CloseProps) {
 
   return <div className="app-window working-window messages-hub"><AppBar title="Messages" onClose={onClose} action={<div className="message-actions"><button type="button" onClick={() => setBuilder("chat")}>New Chat</button><button type="button" onClick={() => setBuilder("group")}>New Group</button></div>} />
     <div className="messages-hub-layout">
-      <aside><h3>Chats</h3>{chats.map((chat) => <button className={activeId === chat.id && !builder ? "selected" : ""} type="button" key={chat.id} onClick={() => openChat(chat.id)}><span style={{ background: chat.group ? "#725cff" : contacts.find((contact) => contact.id === chat.members[0])?.color || "#4a8cff" }}>{chat.group ? "👥" : chat.name.slice(0, 1)}</span><div><strong>{chat.name}{Boolean(chat.unread) && <b className="unread-count">{chat.unread}</b>}</strong><small>{typingId === chat.id ? "typing..." : chat.messages[chat.messages.length - 1]?.text || "New conversation"}</small></div></button>)}</aside>
-      <section>{builder === "chat" ? <div className="new-chat-builder"><h2>New Message</h2><p>Choose a contact.</p>{contacts.map((contact) => <button type="button" key={contact.id} onClick={() => startConversation(contact)}><span style={{ background: contact.color }}>{contact.name.slice(0, 1)}</span><div><strong>{contact.name}</strong><small>{contact.phone}</small></div><b>›</b></button>)}</div> : builder === "group" ? <form className="group-builder" onSubmit={createGroup}><h2>New Group Chat</h2><label>Group name<input value={groupName} onChange={(event) => setGroupName(event.target.value)} placeholder="Friends, Team, Family..." /></label><h3>Add contacts</h3><div>{contacts.map((contact) => <label key={contact.id}><input type="checkbox" checked={members.includes(contact.id)} onChange={() => setMembers(members.includes(contact.id) ? members.filter((id) => id !== contact.id) : [...members, contact.id])} /><span style={{ background: contact.color }}>{contact.name.slice(0, 1)}</span>{contact.name}</label>)}</div><button type="submit" disabled={!groupName.trim() || !members.length}>Create Group</button></form> : active ? <><header><span>{active.group ? "👥" : active.name.slice(0, 1)}</span><div><strong>{active.name}</strong><small>{typingId === active.id ? "typing..." : active.group ? `${active.members.length} members` : "Available"}</small></div></header><div className="hub-thread">{active.messages.map((message) => <div className={`message-line ${message.mine ? "mine" : "theirs"}`} key={message.id}>{active.group && !message.mine && <small>{message.sender || "Group member"}</small>}<div className={`message-bubble ${message.mine ? "mine" : "theirs"}`}>{message.text}</div><span>{message.time || ""}{message.mine && message.status ? ` • ${message.status}` : ""}</span></div>)}{typingId === active.id && <div className="typing-bubble"><i /><i /><i /></div>}</div><form className="message-compose hub-compose" onSubmit={send}><input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={`Message ${active.name}`} aria-label={`Message ${active.name}`} /><button type="submit" disabled={!draft.trim()} aria-label="Send message">↑</button></form></> : <div className="working-empty">Choose a conversation.</div>}</section>
+      <aside><h3>Chats</h3>{chats.map((chat) => <button className={activeId === chat.id && !builder ? "selected" : ""} type="button" key={chat.id} onClick={() => openChat(chat.id)}><span style={{ background: chat.group ? "#725cff" : contacts.find((contact) => contact.id === chat.members[0])?.color || "#4a8cff" }}>{chat.group ? "👥" : chat.name.slice(0, 1)}</span><div><strong>{chat.name}{Boolean(chat.unread) && <b className="unread-count">{chat.unread}</b>}</strong><small>{chat.messages[chat.messages.length - 1]?.text || "New conversation"}</small></div></button>)}</aside>
+      <section>{builder === "chat" ? <div className="new-chat-builder"><h2>New Message</h2><p>Choose a contact.</p>{contacts.map((contact) => <button type="button" key={contact.id} onClick={() => startConversation(contact)}><span style={{ background: contact.color }}>{contact.name.slice(0, 1)}</span><div><strong>{contact.name}</strong><small>{contact.phone}</small></div><b>›</b></button>)}</div> : builder === "group" ? <form className="group-builder" onSubmit={createGroup}><h2>New Group Chat</h2><label>Group name<input value={groupName} onChange={(event) => setGroupName(event.target.value)} placeholder="Friends, Team, Family..." /></label><h3>Add contacts</h3><div>{contacts.map((contact) => <label key={contact.id}><input type="checkbox" checked={members.includes(contact.id)} onChange={() => setMembers(members.includes(contact.id) ? members.filter((id) => id !== contact.id) : [...members, contact.id])} /><span style={{ background: contact.color }}>{contact.name.slice(0, 1)}</span>{contact.name}</label>)}</div><button type="submit" disabled={!groupName.trim() || !members.length}>Create Group</button></form> : active ? <><header><span>{active.group ? "👥" : active.name.slice(0, 1)}</span><div><strong>{active.name}</strong><small>{active.group ? `${active.members.length} members` : "Available"}</small></div></header><div className="hub-thread">{active.messages.map((message) => <div className={`message-line ${message.mine ? "mine" : "theirs"}`} key={message.id}>{active.group && !message.mine && <small>{message.sender || "Group member"}</small>}<div className={`message-bubble ${message.mine ? "mine" : "theirs"}`}>{message.text}</div><span>{message.time || ""}{message.mine && message.status ? ` • ${message.status}` : ""}</span></div>)}</div><form className="message-compose hub-compose" onSubmit={send}><input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={`Message ${active.name}`} aria-label={`Message ${active.name}`} /><button type="submit" disabled={!draft.trim()} aria-label="Send message">↑</button></form></> : <div className="working-empty">Choose a conversation.</div>}</section>
     </div>
   </div>;
 }
