@@ -355,10 +355,10 @@ export function WalletApp({ onClose }: CloseProps) {
     if (localStorage.getItem("cs-wallet-last-reward") === today) { setMessage("Daily reward already collected."); return; }
     const next = { ...wallet, balance: Math.round((wallet.balance + 5) * 100) / 100 };
     setWallet(next); setTransactions([{ id: Date.now(), title: "Daily Reward", amount: 5, date: new Date().toLocaleDateString() }, ...transactions]);
-    localStorage.setItem("cs-wallet-last-reward", today); setMessage("5 Awesome Development Coins added.");
+    localStorage.setItem("cs-wallet-last-reward", today); setMessage("5 KidTopia Dollars added.");
   };
   return <div className="app-window working-window wallet-app"><AppBar title="Wallet" onClose={onClose} action={<span className="saved-label">On-device</span>} />
-    <div className="wallet-scroll"><div className="awesome-card"><small>AWESOME DEVELOPMENT COINS</small><strong>{wallet.balance.toFixed(2)}</strong><span>AD COINS</span><i>CS</i></div><div className="wallet-actions"><button type="button" onClick={claimReward}>+ Daily Reward</button><button type="button" disabled={!wallet.cellular}>📶 {wallet.cellular ? "Cellular Active" : "No Cellular Plan"}</button></div>{message && <p className="wallet-message">{message}</p>}<section className="transactions"><h3>Recent Activity</h3>{transactions.map((item) => <article key={item.id}><span>{item.amount >= 0 ? "+" : "−"}</span><div><strong>{item.title}</strong><small>{item.date}</small></div><b className={item.amount >= 0 ? "credit" : ""}>{item.amount >= 0 ? "+" : ""}{item.amount.toFixed(2)}</b></article>)}</section></div>
+    <div className="wallet-scroll"><div className="awesome-card"><small>KIDTOPIA DOLLARS</small><strong>{wallet.balance.toFixed(2)}</strong><span>KD</span><i>KT</i></div><div className="wallet-actions"><button type="button" onClick={claimReward}>+ Daily Reward</button><button type="button" disabled={!wallet.cellular}>📶 {wallet.cellular ? "Cellular Active" : "No Cellular Plan"}</button></div>{message && <p className="wallet-message">{message}</p>}<section className="transactions"><h3>Recent Activity</h3>{transactions.map((item) => <article key={item.id}><span>{item.amount >= 0 ? "+" : "−"}</span><div><strong>{item.title}</strong><small>{item.date}</small></div><b className={item.amount >= 0 ? "credit" : ""}>{item.amount >= 0 ? "+" : ""}{item.amount.toFixed(2)} KD</b></article>)}</section></div>
   </div>;
 }
 

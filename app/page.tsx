@@ -592,7 +592,9 @@ function InteractiveSettings({ wallpaper, chooseWallpaper, device, onClose }: { 
   const [updating, setUpdating] = useState(false);
   const [updateMessage, setUpdateMessage] = useState("");
   const [country, setCountry] = useState("United States");
-  const [wifi, setWifi] = useState({ enabled: true, hotspot: false, connected: "" });
+  const [wifi, setWifi] = useState({ enabled: true, hotspot: false, hotspotName: "Custom Software", hotspotPassword: "" });
+  const [networkInfo, setNetworkInfo] = useState({ online: true, type: "Connection", effectiveType: "", downlink: 0 });
+  const [hotspotMessage, setHotspotMessage] = useState("");
 
   useEffect(() => {
     try {
@@ -603,10 +605,18 @@ function InteractiveSettings({ wallpaper, chooseWallpaper, device, onClose }: { 
       setSoftwareVersion(localStorage.getItem("cs-software-version") || "1.0.4");
       setCountry(localStorage.getItem("cs-country") || "United States");
       const savedWifi = localStorage.getItem("cs-wifi");
-      if (savedWifi) setWifi({ enabled: true, hotspot: false, connected: "", ...JSON.parse(savedWifi) });
+      if (savedWifi) setWifi({ enabled: true, hotspot: false, hotspotName: "Custom Software", hotspotPassword: "", ...JSON.parse(savedWifi) });
     } catch { /* keep defaults */ }
   // Settings are loaded once when the app opens.
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    type ConnectionInfo = { type?: string; effectiveType?: string; downlink?: number; addEventListener?: (name: string, listener: () => void) => void; removeEventListener?: (name: string, listener: () => void) => void };
+    const connection = (navigator as Navigator & { connection?: ConnectionInfo }).connection;
+    const update = () => setNetworkInfo({ online: navigator.onLine, type: connection?.type || (navigator.onLine ? "Connected network" : "Offline"), effectiveType: connection?.effectiveType || "", downlink: connection?.downlink || 0 });
+    update(); window.addEventListener("online", update); window.addEventListener("offline", update); connection?.addEventListener?.("change", update);
+    return () => { window.removeEventListener("online", update); window.removeEventListener("offline", update); connection?.removeEventListener?.("change", update); };
   }, []);
 
   const save = (next: typeof preferences, nextName = deviceName) => {
@@ -617,7 +627,7 @@ function InteractiveSettings({ wallpaper, chooseWallpaper, device, onClose }: { 
   const toggle = (key: keyof typeof preferences) => save({ ...preferences, [key]: !preferences[key] });
   const activateCellular = () => {
     if (device.family !== "phone" || wallet.cellular) return;
-    if (wallet.balance < 74.99) { setPurchaseMessage("You need more Awesome Development Coins."); return; }
+    if (wallet.balance < 74.99) { setPurchaseMessage("You need more KidTopia Dollars."); return; }
     const next = { balance: Math.round((wallet.balance - 74.99) * 100) / 100, cellular: true };
     setWallet(next); localStorage.setItem("cs-awesome-wallet", JSON.stringify(next));
     const transactions = JSON.parse(localStorage.getItem("cs-wallet-transactions") || "[]");
@@ -644,23 +654,20 @@ function InteractiveSettings({ wallpaper, chooseWallpaper, device, onClose }: { 
     }
   };
   const saveWifi = (next: typeof wifi) => { setWifi(next); localStorage.setItem("cs-wifi", JSON.stringify(next)); };
-  const localNetworks = country === "KidTopia" ? ["KidTopia Local", "KidTopia Family", "KT Community"] : ["Home Network", "Community Wi-Fi", "Custom Local"];
-  const toggleWifi = () => saveWifi({ ...wifi, enabled: !wifi.enabled, connected: wifi.enabled ? "" : wifi.connected });
+  const toggleWifi = () => saveWifi({ ...wifi, enabled: !wifi.enabled });
   const toggleHotspot = () => {
     if (!wallet.cellular || device.family !== "phone") return;
+    if (!wifi.hotspot && wifi.hotspotPassword.length < 8) { setHotspotMessage("Create a password with at least 8 characters first."); return; }
+    setHotspotMessage(wifi.hotspot ? "Personal Hotspot turned off." : "Personal Hotspot is ready for approved users.");
     saveWifi({ ...wifi, hotspot: !wifi.hotspot });
-  };
-  const connectNetwork = (network: string) => {
-    if (!wifi.enabled) return;
-    saveWifi({ ...wifi, connected: wifi.connected === network ? "" : network });
   };
 
   return <div className="app-window settings-window interactive-settings"><AppHeader title="Settings" onClose={onClose} />
     <div className="settings-scroll"><h2>Settings</h2>
       <div className="profile-card"><span>CS</span><div><input value={deviceName} onChange={(event) => rename(event.target.value)} aria-label="Device name" /><small>{device.name} • Custom Software 1.0</small></div><b>✓</b></div>
       <section><h3>Wallpaper</h3><div className="wallpaper-picker">{WALLPAPERS.map((choice) => <button key={choice} className={`${choice} ${wallpaper === choice ? "selected" : ""}`} type="button" onClick={() => chooseWallpaper(choice)} aria-label={`Choose ${choice}`}><span>✓</span></button>)}</div></section>
-      <section className="wifi-settings"><div className="wifi-heading"><div><span>Wi-Fi</span><small>{wifi.enabled ? (wifi.connected || "On") : "Off"}</small></div><button className={`wifi-master ${wifi.enabled ? "on" : ""}`} type="button" onClick={toggleWifi} aria-label="Toggle Wi-Fi"><i /></button></div><div className={`hotspot-card ${wifi.hotspot ? "active" : ""}`}><div><span>H</span><div><strong>Cellular Hotspot</strong><small>{device.family !== "phone" ? "Choose an iPhone profile" : wallet.cellular ? (wifi.hotspot ? "Cellular Wi-Fi is sharing" : "Share cellular as Wi-Fi") : "Activate Custom Cellular first"}</small></div></div><button type="button" disabled={device.family !== "phone" || !wallet.cellular} onClick={toggleHotspot}>{wifi.hotspot ? "Turn Off" : "Turn On"}</button></div><div className="local-networks"><div><h3>Local Networks</h3><small>{country}</small></div>{localNetworks.map((network, index) => <button className={wifi.connected === network ? "connected" : ""} type="button" disabled={!wifi.enabled} key={network} onClick={() => connectNetwork(network)}><span>{index === 0 ? "|||" : index === 1 ? "||" : "|"}</span><div><strong>{network}</strong><small>{wifi.connected === network ? "Connected" : "Local Wi-Fi network"}</small></div><b>{wifi.connected === network ? "✓" : "›"}</b></button>)}</div></section>
-      <section className="cellular-settings"><div className="coin-wallet"><span>AD</span><div><small>AWESOME DEVELOPMENT COINS</small><strong>{wallet.balance.toFixed(2)}</strong></div></div>{device.family === "phone" ? <div className="cellular-plan"><div><span>📶</span><div><strong>Custom Cellular</strong><small>{wallet.cellular ? "Active • Unlimited virtual data" : "Cellular service for this iPhone"}</small></div></div>{wallet.cellular ? <b>ACTIVE</b> : <button type="button" onClick={activateCellular}>Pay 74.99 Coins</button>}</div> : <p className="iphone-only-note">Custom Cellular is available when an iPhone profile is selected.</p>}{purchaseMessage && <small className="purchase-message">{purchaseMessage}</small>}</section>
+      <section className="wifi-settings"><div className="wifi-heading"><div><span>Wi-Fi</span><small>{!wifi.enabled ? "Off" : networkInfo.online ? "Connected" : "No connection"}</small></div><button className={`wifi-master ${wifi.enabled ? "on" : ""}`} type="button" onClick={toggleWifi} aria-label="Toggle Wi-Fi"><i /></button></div><div className="real-network"><span>|||</span><div><strong>Current Local Network</strong><small>{wifi.enabled && networkInfo.online ? `${networkInfo.type}${networkInfo.effectiveType ? ` • ${networkInfo.effectiveType.toUpperCase()}` : ""}${networkInfo.downlink ? ` • ${networkInfo.downlink} Mbps` : ""}` : "Not connected"}</small></div><b>{wifi.enabled && networkInfo.online ? "✓" : "—"}</b></div><p className="network-privacy">For privacy, iPhone and browsers do not reveal nearby Wi-Fi names to apps.</p>{device.family === "phone" && <div className="personal-hotspot"><div className={`hotspot-card ${wifi.hotspot ? "active" : ""}`}><div><span>H</span><div><strong>Personal Hotspot</strong><small>{wallet.cellular ? (wifi.hotspot ? `${wifi.hotspotName} is sharing Cellular Wi-Fi` : "Share Custom Cellular as Wi-Fi") : "Activate Custom Cellular first"}</small></div></div><button type="button" disabled={!wallet.cellular} onClick={toggleHotspot}>{wifi.hotspot ? "Turn Off" : "Turn On"}</button></div><div className="hotspot-password"><label>Hotspot name<input value={wifi.hotspotName} onChange={(event) => saveWifi({ ...wifi, hotspotName: event.target.value.slice(0, 30) })} placeholder="Custom Software" /></label><label>Password<input type="password" minLength={8} value={wifi.hotspotPassword} onChange={(event) => { saveWifi({ ...wifi, hotspotPassword: event.target.value }); setHotspotMessage(""); }} placeholder="At least 8 characters" /></label><small>Only give this password to people you want to let use the hotspot.</small>{hotspotMessage && <b>{hotspotMessage}</b>}</div></div>}</section>
+      <section className="cellular-settings"><div className="coin-wallet"><span>KD</span><div><small>KIDTOPIA DOLLARS</small><strong>{wallet.balance.toFixed(2)}</strong></div></div>{device.family === "phone" ? <div className="cellular-plan"><div><span>📶</span><div><strong>Custom Cellular</strong><small>{wallet.cellular ? "Active • Unlimited virtual data" : "Cellular service for this iPhone"}</small></div></div>{wallet.cellular ? <b>ACTIVE</b> : <button type="button" onClick={activateCellular}>Pay 74.99 KidTopia Dollars</button>}</div> : <p className="iphone-only-note">Custom Cellular is available when an iPhone profile is selected.</p>}{purchaseMessage && <small className="purchase-message">{purchaseMessage}</small>}</section>
       <section className="settings-list toggle-settings">
         <SettingToggle icon="🔔" title="Notifications" detail="App alerts and banners" enabled={preferences.notifications} onToggle={() => toggle("notifications")} />
         <SettingToggle icon="🔊" title="Sounds & Haptics" detail="Interface feedback" enabled={preferences.sounds} onToggle={() => toggle("sounds")} />

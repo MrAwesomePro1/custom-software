@@ -1,4 +1,4 @@
-const CACHE = "custom-software-v11";
+const CACHE = "custom-software-v12";
 const CORE = ["/", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (event) => {
